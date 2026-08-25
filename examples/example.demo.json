@@ -1,0 +1,21 @@
+{
+  "name": "playwright-example",
+  "viewport": { "width": 1280, "height": 720 },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://playwright.dev/",
+      "title": "Abrindo o site do Playwright"
+    },
+    {
+      "action": "assertVisible",
+      "target": { "role": "link", "name": "Get started" },
+      "title": "Confirmando a página inicial"
+    },
+    {
+      "action": "wait",
+      "milliseconds": 1500,
+      "title": "Mostrando a interface"
+    }
+  ]
+}
