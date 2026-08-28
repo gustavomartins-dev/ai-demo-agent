@@ -65,6 +65,19 @@ O objetivo, o resumo, os alertas e os passos serão exibidos antes da confirmaç
 Somente uma resposta `s`/`sim` inicia o Playwright. Em uma automação já aprovada,
 `--yes` registra a confirmação explicitamente na chamada do comando.
 
+Ao concluir, a pasta da execução contém:
+
+```text
+demo.webm
+execution-report.json
+evidence/
+```
+
+Esse ciclo foi validado de ponta a ponta com o Hermes Agent v0.20.4: o Hermes
+analisou o site oficial do Playwright e gerou um plano de oito passos; depois da
+aprovação, o Playwright concluiu todos os passos e produziu quatro evidências
+visuais com status final `passed`.
+
 ## Como executar
 
 Requisitos: Node.js 20 ou superior.
@@ -111,9 +124,9 @@ URL + repositório + objetivo
 - [x] Executar roteiros determinísticos
 - [x] Gravar o navegador automaticamente
 - [x] Validar passos e limitar esperas
-- [ ] Ler README e páginas do produto
-- [ ] Gerar roteiro com saída estruturada por IA
-- [ ] Mostrar e aprovar o plano antes da gravação
+- [x] Ler README e páginas do produto
+- [x] Gerar roteiro com saída estruturada por IA
+- [x] Mostrar e aprovar o plano antes da gravação
 - [ ] Destacar cursor e aplicar zoom nas ações
 - [ ] Gerar narração e legendas sincronizadas
 - [ ] Exportar MP4 horizontal e vertical
