@@ -16,6 +16,11 @@
     "build:web": "npm run build --workspace @ai-demo-agent/web",
     "lint:web": "npm run lint --workspace @ai-demo-agent/web",
     "check:web": "npm run check --workspace @ai-demo-agent/web",
+    "db:generate": "npm run db:generate --workspace @ai-demo-agent/web",
+    "db:validate": "npm run db:validate --workspace @ai-demo-agent/web",
+    "db:migrate": "npm run db:migrate --workspace @ai-demo-agent/web",
+    "db:deploy": "npm run db:deploy --workspace @ai-demo-agent/web",
+    "db:studio": "npm run db:studio --workspace @ai-demo-agent/web",
     "check": "tsc --noEmit",
     "test": "vitest run"
   },

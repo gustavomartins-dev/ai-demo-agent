@@ -19,6 +19,16 @@ npm install
 npm run dev:web
 ```
 
+O desenvolvimento local usa PostgreSQL:
+
+```bash
+cp apps/web/.env.example apps/web/.env
+docker compose up -d postgres
+npm run db:migrate
+```
+
+O modelo completo está documentado em [docs/data-model.md](docs/data-model.md).
+
 ## Visão
 
 O AI Demo Agent recebe uma aplicação e cria uma demonstração reproduzível: entende o produto, planeja uma narrativa, utiliza a interface em um navegador real, grava o fluxo e prepara versões para GitHub, LinkedIn e redes sociais.

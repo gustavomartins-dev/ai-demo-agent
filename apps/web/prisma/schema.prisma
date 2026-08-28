@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  READY
+  PROCESSING
+  REVIEW
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum RunStatus {
+  QUEUED
+  ANALYZING
+  PLANNING
+  RECORDING
+  DRAFTING
+  READY_FOR_REVIEW
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum AssetType {
+  VIDEO
+  THUMBNAIL
+  CAPTIONS
+  EVIDENCE
+  EXECUTION_REPORT
+}
+
+enum AssetStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum SocialPlatform {
+  X
+  LINKEDIN
+}
+
+enum SocialAccountStatus {
+  DISCONNECTED
+  CONNECTED
+  EXPIRED
+  REVOKED
+}
+
+enum DraftStatus {
+  DRAFT
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  projects       Project[]
+  socialAccounts SocialAccount[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Project {
+  id              String          @id @default(cuid())
+  ownerId         String
+  owner           User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  repositoryUrl   String?
+  productUrl      String
+  isOpenSource    Boolean         @default(false)
+  contentLanguage String          @default("en")
+  status          ProjectStatus   @default(DRAFT)
+  runs            GenerationRun[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([ownerId, updatedAt])
+  @@index([status])
+}
+
+model GenerationRun {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  objective    String
+  status       RunStatus     @default(QUEUED)
+  plan         Json?
+  error        String?
+  assets       MediaAsset[]
+  socialDrafts SocialDraft[]
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([status])
+}
+
+model MediaAsset {
+  id              String        @id @default(cuid())
+  generationRunId String
+  generationRun   GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+  type            AssetType
+  status          AssetStatus   @default(PENDING)
+  storageKey      String
+  mimeType        String
+  sizeBytes       BigInt?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([generationRunId, type])
+}
+
+model SocialDraft {
+  id               String         @id @default(cuid())
+  generationRunId  String
+  generationRun    GenerationRun  @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+  platform         SocialPlatform
+  status           DraftStatus    @default(DRAFT)
+  language         String         @default("en")
+  content          String
+  mentions         Json?
+  repositoryUrl    String?
+  publishedPostId  String?
+  publishedPostUrl String?
+  approvedAt       DateTime?
+  publishedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([generationRunId, platform])
+  @@index([status])
+}
+
+model SocialAccount {
+  id                String              @id @default(cuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform          SocialPlatform
+  status            SocialAccountStatus @default(DISCONNECTED)
+  externalAccountId String?
+  displayName       String?
+  handle            String?
+  connectedAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([userId, platform])
+  @@unique([platform, externalAccountId])
+}

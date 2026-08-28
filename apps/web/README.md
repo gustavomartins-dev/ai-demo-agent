@@ -14,6 +14,16 @@ npm run dev:web
 
 Open `http://localhost:3000`.
 
+## Database
+
+```bash
+cp apps/web/.env.example apps/web/.env
+docker compose up -d postgres
+npm run db:migrate
+```
+
+The committed Prisma migrations are the source of truth for PostgreSQL.
+
 ## Quality checks
 
 ```bash
