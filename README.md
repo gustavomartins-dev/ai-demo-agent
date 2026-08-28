@@ -42,6 +42,17 @@ AI_DEMO_HERMES_TIMEOUT_MS=120000
 Modelo e provedor vazios preservam a configuração que já estiver ativa no
 Hermes. O AI Demo Agent validará toda resposta antes de entregá-la ao executor.
 
+Para gerar um plano sem iniciar a gravação:
+
+```bash
+npm run plan -- \
+  --url https://produto.dev \
+  --objective "Mostrar o fluxo principal"
+```
+
+O comando lê o `README.md` do repositório atual quando ele existe e salva um
+`demo-plan.json` validado dentro de `output/`. A gravação não começa nessa etapa.
+
 ## Como executar
 
 Requisitos: Node.js 20 ou superior.

@@ -7,6 +7,7 @@
   "scripts": {
     "demo": "tsx src/cli.ts",
     "demo:example": "tsx src/cli.ts examples/example.demo.json",
+    "plan": "tsx src/plan-cli.ts",
     "check": "tsc --noEmit",
     "test": "vitest run"
   },
