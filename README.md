@@ -23,6 +23,25 @@ O primeiro núcleo já está implementado:
 
 A geração do roteiro por IA, narração e edição automática estão planejadas para as próximas versões.
 
+## Integração planejada com Hermes Agent
+
+O Hermes Agent será responsável por analisar o objetivo e propor um plano. O
+Playwright continuará responsável por executar e gravar o roteiro validado.
+
+O contrato entre os dois está definido pelos schemas
+`hermesPlanningRequestSchema` e `hermesDemoPlanSchema`. A conexão usa o comando
+local `hermes` por padrão e pode ser configurada sem alterar o código:
+
+```bash
+AI_DEMO_HERMES_COMMAND=hermes
+AI_DEMO_HERMES_MODEL=
+AI_DEMO_HERMES_PROVIDER=
+AI_DEMO_HERMES_TIMEOUT_MS=120000
+```
+
+Modelo e provedor vazios preservam a configuração que já estiver ativa no
+Hermes. O AI Demo Agent validará toda resposta antes de entregá-la ao executor.
+
 ## Como executar
 
 Requisitos: Node.js 20 ou superior.

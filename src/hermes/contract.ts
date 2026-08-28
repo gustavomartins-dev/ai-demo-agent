@@ -1,0 +1,22 @@
+import { z } from "zod";
+import { demoSchema } from "../schema.js";
+
+export const hermesPlanningRequestSchema = z.object({
+  url: z.string().url(),
+  objective: z.string().min(1),
+  repository: z.object({
+    path: z.string().min(1).optional(),
+    readme: z.string().min(1).optional()
+  }).optional()
+});
+
+export const hermesDemoPlanSchema = z.object({
+  objective: z.string().min(1),
+  summary: z.string().min(1),
+  assumptions: z.array(z.string().min(1)).default([]),
+  warnings: z.array(z.string().min(1)).default([]),
+  demo: demoSchema
+});
+
+export type HermesPlanningRequest = z.infer<typeof hermesPlanningRequestSchema>;
+export type HermesDemoPlan = z.infer<typeof hermesDemoPlanSchema>;
