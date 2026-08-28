@@ -19,6 +19,8 @@ O primeiro núcleo já está implementado:
 - ações de navegação, clique, preenchimento, teclado e espera;
 - verificações visuais antes da conclusão;
 - gravação automática em WebM;
+- screenshots das verificações e do ponto de falha;
+- relatório estruturado de cada execução;
 - testes do formato de roteiro.
 
 A geração do roteiro por IA, narração e edição automática estão planejadas para as próximas versões.

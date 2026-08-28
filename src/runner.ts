@@ -1,7 +1,33 @@
 import { chromium, type Locator, type Page } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Demo, DemoTarget } from "./schema.js";
+import type { Demo, DemoStep, DemoTarget } from "./schema.js";
+
+export type StepExecutionReport = {
+  index: number;
+  action: DemoStep["action"];
+  title?: string;
+  status: "passed" | "failed";
+  durationMs: number;
+  evidencePath?: string;
+  error?: string;
+};
+
+export type DemoExecutionReport = {
+  demoName: string;
+  status: "passed" | "failed";
+  startedAt: string;
+  finishedAt: string;
+  videoPath: string | null;
+  steps: StepExecutionReport[];
+  error?: string;
+};
+
+export type DemoRunResult = {
+  videoPath: string;
+  reportPath: string;
+  report: DemoExecutionReport;
+};
 
 function locate(page: Page, target: DemoTarget): Locator {
   if (target.testId) return page.getByTestId(target.testId);
@@ -11,10 +37,25 @@ function locate(page: Page, target: DemoTarget): Locator {
   throw new Error("Alvo inválido");
 }
 
-export async function runDemo(demo: Demo, outputRoot = "output"): Promise<string> {
-  const stamp = new Date().toISOString().replaceAll(":", "-");
+async function executeStep(page: Page, step: DemoStep): Promise<void> {
+  if (step.action === "goto") await page.goto(step.url, { waitUntil: "domcontentloaded" });
+  if (step.action === "click") await locate(page, step.target).click();
+  if (step.action === "fill") await locate(page, step.target).fill(step.value);
+  if (step.action === "press") await locate(page, step.target).press(step.key);
+  if (step.action === "wait") await page.waitForTimeout(step.milliseconds);
+  if (step.action === "assertVisible") await locate(page, step.target).waitFor({ state: "visible" });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Promise<DemoRunResult> {
+  const startedAt = new Date();
+  const stamp = startedAt.toISOString().replaceAll(":", "-");
   const outputDir = path.resolve(outputRoot, `${demo.name.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}-${stamp}`);
-  await mkdir(outputDir, { recursive: true });
+  const evidenceDir = path.join(outputDir, "evidence");
+  await mkdir(evidenceDir, { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -23,32 +64,89 @@ export async function runDemo(demo: Demo, outputRoot = "output"): Promise<string
   });
   const page = await context.newPage();
   const video = page.video();
+  const steps: StepExecutionReport[] = [];
   let executionError: unknown;
 
-  try {
-    for (const [index, step] of demo.steps.entries()) {
-      console.log(`[${index + 1}/${demo.steps.length}] ${step.title ?? step.action}`);
-      if (step.action === "goto") await page.goto(step.url, { waitUntil: "networkidle" });
-      if (step.action === "click") await locate(page, step.target).click();
-      if (step.action === "fill") await locate(page, step.target).fill(step.value);
-      if (step.action === "press") await locate(page, step.target).press(step.key);
-      if (step.action === "wait") await page.waitForTimeout(step.milliseconds);
-      if (step.action === "assertVisible") await locate(page, step.target).waitFor({ state: "visible" });
+  for (const [index, step] of demo.steps.entries()) {
+    console.log(`[${index + 1}/${demo.steps.length}] ${step.title ?? step.action}`);
+    const stepStartedAt = Date.now();
+
+    try {
+      await executeStep(page, step);
+      let evidencePath: string | undefined;
+      if (step.action === "assertVisible") {
+        evidencePath = path.join("evidence", `step-${index + 1}-assert-visible.png`);
+        await page.screenshot({ path: path.join(outputDir, evidencePath), fullPage: true });
+      }
+      steps.push({
+        index: index + 1,
+        action: step.action,
+        ...(step.title ? { title: step.title } : {}),
+        status: "passed",
+        durationMs: Date.now() - stepStartedAt,
+        ...(evidencePath ? { evidencePath } : {})
+      });
+    } catch (error) {
+      executionError = error;
+      const evidencePath = path.join("evidence", `step-${index + 1}-failure.png`);
+      let screenshotSaved = false;
+      try {
+        await page.screenshot({ path: path.join(outputDir, evidencePath), fullPage: true });
+        screenshotSaved = true;
+      } catch {
+        // The report still records the original browser failure.
+      }
+      steps.push({
+        index: index + 1,
+        action: step.action,
+        ...(step.title ? { title: step.title } : {}),
+        status: "failed",
+        durationMs: Date.now() - stepStartedAt,
+        ...(screenshotSaved ? { evidencePath } : {}),
+        error: errorMessage(error)
+      });
+      break;
     }
-  } catch (error) {
-    executionError = error;
-  } finally {
+  }
+
+  try {
     await context.close();
+  } catch (error) {
+    executionError ??= error;
   }
 
   const videoPath = path.join(outputDir, "demo.webm");
+  let videoSaved = false;
   try {
     if (!video) throw new Error("O navegador não produziu uma gravação");
     await video.saveAs(videoPath);
-  } finally {
-    await browser.close();
+    videoSaved = true;
+  } catch (error) {
+    executionError ??= error;
   }
 
+  try {
+    await browser.close();
+  } catch (error) {
+    executionError ??= error;
+  }
+
+  const report: DemoExecutionReport = {
+    demoName: demo.name,
+    status: executionError ? "failed" : "passed",
+    startedAt: startedAt.toISOString(),
+    finishedAt: new Date().toISOString(),
+    videoPath: videoSaved ? videoPath : null,
+    steps,
+    ...(executionError ? { error: errorMessage(executionError) } : {})
+  };
+  const reportPath = path.join(outputDir, "execution-report.json");
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
   if (executionError) throw executionError;
-  return videoPath;
+  return { videoPath, reportPath, report };
+}
+
+export async function runDemo(demo: Demo, outputRoot = "output"): Promise<string> {
+  return (await runDemoWithReport(demo, outputRoot)).videoPath;
 }
