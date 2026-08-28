@@ -13,7 +13,13 @@ function Mark() {
   );
 }
 
-export default function Home() {
+function readableStatus(status: string | null): string {
+  return (status ?? "Not started").toLowerCase().replaceAll("_", " ");
+}
+
+export default async function Home() {
+  const dashboard = await getDashboardData();
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
@@ -43,28 +49,48 @@ export default function Home() {
           <header className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 lg:hidden"><Mark /><span className="font-semibold">AI Demo Agent</span></div>
             <div className="hidden lg:block"><p className="text-sm text-zinc-500">Personal workspace</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">Launch dashboard</h1></div>
-            <button className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.25)] transition hover:bg-violet-400">New project</button>
+            <a href="#new-project" className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.25)] transition hover:bg-violet-400">New project</a>
           </header>
 
           <section className="mt-8 grid gap-4 sm:grid-cols-3">
-            {[["Projects", "0", "Products in your workspace"], ["Ready for review", "0", "Waiting for your approval"], ["Published", "0", "Approved social launches"]].map(([label, value, detail]) => (
+            {[["Projects", dashboard.counts.projects, "Products in your workspace"], ["Ready for review", dashboard.counts.readyForReview, "Waiting for your approval"], ["Published", dashboard.counts.published, "Approved social launches"]].map(([label, value, detail]) => (
               <article key={label} className="rounded-2xl border border-white/8 bg-white/[0.035] p-5">
                 <p className="text-sm text-zinc-500">{label}</p><p className="mt-3 text-3xl font-semibold tracking-tight">{value}</p><p className="mt-2 text-xs text-zinc-600">{detail}</p>
               </article>
             ))}
           </section>
 
+          {!dashboard.databaseConfigured && (
+            <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] px-5 py-4 text-sm text-amber-100/80">
+              PostgreSQL is not configured yet. Follow <code className="rounded bg-black/30 px-1.5 py-1 text-xs">apps/web/.env.example</code> to enable project creation.
+            </div>
+          )}
+
+          <section id="new-project" className="mt-6 rounded-3xl border border-white/8 bg-[#111114] p-6">
+            <div className="mb-6"><p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-400">New launch</p><h2 className="mt-2 text-lg font-semibold">Add a project</h2><p className="mt-1 text-sm text-zinc-500">The first run will be queued with your launch objective.</p></div>
+            <ProjectForm databaseConfigured={dashboard.databaseConfigured} />
+          </section>
+
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]">
             <div id="projects" className="overflow-hidden rounded-3xl border border-white/8 bg-[#111114]">
               <div className="border-b border-white/8 px-6 py-5"><h2 className="font-semibold">Your projects</h2><p className="mt-1 text-sm text-zinc-500">Every launch stays here from discovery to publication.</p></div>
-              <div className="grid min-h-80 place-items-center px-6 py-12 text-center">
-                <div className="max-w-sm">
+              {dashboard.projects.length === 0 ? (
+                <div className="grid min-h-80 place-items-center px-6 py-12 text-center"><div className="max-w-sm">
                   <div className="mx-auto grid size-14 place-items-center rounded-2xl border border-violet-400/20 bg-violet-400/10 text-2xl text-violet-300">+</div>
                   <h3 className="mt-5 text-lg font-semibold">Create your first launch</h3>
                   <p className="mt-2 text-sm leading-6 text-zinc-500">Add a repository and product URL. The agent will understand the project, record a verified demo, and prepare both social drafts.</p>
-                  <button className="mt-6 rounded-xl border border-white/10 bg-white/7 px-4 py-2.5 text-sm font-medium transition hover:bg-white/10">Add a project</button>
+                  <a href="#new-project" className="mt-6 inline-block rounded-xl border border-white/10 bg-white/7 px-4 py-2.5 text-sm font-medium transition hover:bg-white/10">Add a project</a>
+                </div></div>
+              ) : (
+                <div className="divide-y divide-white/8">
+                  {dashboard.projects.map((project) => (
+                    <article key={project.id} className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div><div className="flex items-center gap-2"><h3 className="font-medium">{project.name}</h3>{project.isOpenSource && <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-300">Open source</span>}</div><a className="mt-1 block max-w-md truncate text-xs text-zinc-600 hover:text-zinc-400" href={project.productUrl} target="_blank" rel="noreferrer">{project.productUrl}</a></div>
+                      <div className="text-left sm:text-right"><p className="text-xs font-medium capitalize text-zinc-300">{readableStatus(project.latestRunStatus)}</p><p className="mt-1 text-[11px] text-zinc-600">Updated {new Date(project.updatedAt).toLocaleDateString("en-US")}</p></div>
+                    </article>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
 
             <div id="review" className="rounded-3xl border border-white/8 bg-[#111114] p-6">
@@ -87,3 +113,7 @@ export default function Home() {
     </div>
   );
 }
+import { getDashboardData } from "@/data/projects";
+import { ProjectForm } from "./project-form";
+
+export const dynamic = "force-dynamic";
