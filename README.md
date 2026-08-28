@@ -53,6 +53,16 @@ npm run plan -- \
 O comando lê o `README.md` do repositório atual quando ele existe e salva um
 `demo-plan.json` validado dentro de `output/`. A gravação não começa nessa etapa.
 
+Depois de revisar o arquivo, solicite a gravação:
+
+```bash
+npm run record-plan -- output/.../demo-plan.json
+```
+
+O objetivo, o resumo, os alertas e os passos serão exibidos antes da confirmação.
+Somente uma resposta `s`/`sim` inicia o Playwright. Em uma automação já aprovada,
+`--yes` registra a confirmação explicitamente na chamada do comando.
+
 ## Como executar
 
 Requisitos: Node.js 20 ou superior.
