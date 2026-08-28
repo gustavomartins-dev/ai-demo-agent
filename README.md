@@ -4,6 +4,21 @@ Transforme uma aplicação web funcionando em um vídeo de demonstração sem pr
 
 > Projeto idealizado e dirigido por Gustavo Martins, desenvolvido com auxílio total de inteligência artificial.
 
+## Estrutura do repositório
+
+```text
+apps/web/   aplicação Next.js e futuro dashboard de publicação
+src/        motor de planejamento, aprovação e gravação
+tests/      testes do motor e da integração Playwright
+```
+
+Para iniciar a aplicação web:
+
+```bash
+npm install
+npm run dev:web
+```
+
 ## Visão
 
 O AI Demo Agent recebe uma aplicação e cria uma demonstração reproduzível: entende o produto, planeja uma narrativa, utiliza a interface em um navegador real, grava o fluxo e prepara versões para GitHub, LinkedIn e redes sociais.
