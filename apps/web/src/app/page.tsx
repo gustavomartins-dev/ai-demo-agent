@@ -85,7 +85,7 @@ export default async function Home() {
                 <div className="divide-y divide-white/8">
                   {dashboard.projects.map((project) => (
                     <article key={project.id} className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-                      <div><div className="flex items-center gap-2"><h3 className="font-medium">{project.name}</h3>{project.isOpenSource && <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-300">Open source</span>}</div><a className="mt-1 block max-w-md truncate text-xs text-zinc-600 hover:text-zinc-400" href={project.productUrl} target="_blank" rel="noreferrer">{project.productUrl}</a></div>
+                      <div><div className="flex items-center gap-2"><Link className="font-medium hover:text-violet-300" href={`/projects/${project.id}`}>{project.name}</Link>{project.isOpenSource && <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-300">Open source</span>}</div><a className="mt-1 block max-w-md truncate text-xs text-zinc-600 hover:text-zinc-400" href={project.productUrl} target="_blank" rel="noreferrer">{project.productUrl}</a></div>
                       <div className="text-left sm:text-right"><p className="text-xs font-medium capitalize text-zinc-300">{readableStatus(project.latestRunStatus)}</p><p className="mt-1 text-[11px] text-zinc-600">Updated {new Date(project.updatedAt).toLocaleDateString("en-US")}</p></div>
                     </article>
                   ))}
@@ -113,7 +113,7 @@ export default async function Home() {
     </div>
   );
 }
+export const dynamic = "force-dynamic";
+import Link from "next/link";
 import { getDashboardData } from "@/data/projects";
 import { ProjectForm } from "./project-form";
-
-export const dynamic = "force-dynamic";
