@@ -2,14 +2,37 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { createProject, retryFailedGenerationRun } from "@/data/projects";
+import { createProject, retryFailedGenerationRun, updateOwnedSocialDraft } from "@/data/projects";
 import { projectInputFromFormData, projectInputSchema } from "@/lib/project-input";
+import { socialDraftEditFromFormData, socialDraftEditSchema } from "@/lib/social-draft-input";
 
 export type CreateProjectState = {
   status: "idle" | "error" | "success";
   message: string;
   errors?: Record<string, string[]>;
 };
+
+export type SaveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
+
+export async function saveSocialDraftAction(
+  _previousState: SaveSocialDraftState,
+  formData: FormData,
+): Promise<SaveSocialDraftState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const validated = socialDraftEditSchema.safeParse(socialDraftEditFromFormData(formData));
+  if (!validated.success) return { status: "error", message: validated.error.issues[0]?.message ?? "Invalid draft." };
+
+  const saved = await updateOwnedSocialDraft(
+    session.user.id,
+    validated.data.draftId,
+    validated.data.platform,
+    validated.data.content,
+  );
+  if (!saved) return { status: "error", message: "This draft is no longer available." };
+  revalidatePath(`/projects/${saved.projectId}`);
+  return { status: "success", message: "Draft saved." };
+}
 
 export async function createProjectAction(
   _previousState: CreateProjectState,

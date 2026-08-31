@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getProjectDetail } from "@/data/projects";
 import { retryGenerationRunAction } from "@/app/actions";
 import { RetryButton } from "@/app/retry-button";
+import { SocialDraftEditor } from "@/app/social-draft-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,25 @@ const statusCopy: Record<string, string> = {
   PLANNING: "Hermes is building and validating the demo plan.",
   PLANNED: "The validated plan is waiting for browser recording.",
   RECORDING: "Playwright is recording the verified browser flow.",
-  READY_FOR_REVIEW: "Video and evidence are ready for your review.",
+  DRAFTING: "Hermes is writing evidence-grounded English social drafts.",
+  READY_FOR_REVIEW: "Video, evidence, and social drafts are ready for your review.",
   FAILED: "Processing stopped after the available automatic attempts.",
 };
+
+type Mention = { identity: string; reason: string };
+type Evidence = { id: string; statement: string; evidenceStorageKey: string };
+
+function mentions(value: unknown): Mention[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Mention => Boolean(item && typeof item === "object" && "identity" in item && "reason" in item))
+    : [];
+}
+
+function evidence(value: unknown): Evidence[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Evidence => Boolean(item && typeof item === "object" && "id" in item && "statement" in item && "evidenceStorageKey" in item))
+    : [];
+}
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -69,17 +86,27 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   {run.error && <div className="mt-5 rounded-xl border border-rose-400/15 bg-rose-400/[0.06] p-4 text-sm text-rose-300">{run.error}</div>}
                   {run.status === "FAILED" && <form action={retryGenerationRunAction} className="mt-4"><input name="runId" type="hidden" value={run.id} /><RetryButton /></form>}
 
-                  <div className="mt-6 grid gap-5 lg:grid-cols-2">
+                  <div className="mt-6">
                     <div className="rounded-2xl border border-white/8 bg-black/20 p-5">
                       <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Media and evidence</h4><span className="text-xs text-zinc-600">{run.assets.length} files</span></div>
                       {run.assets.length === 0 ? <p className="mt-5 text-sm text-zinc-600">Artifacts will appear after recording starts.</p> : <div className="mt-4 space-y-2">{run.assets.map((asset) => <div key={asset.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2.5"><div><p className="text-xs font-medium capitalize">{label(asset.type)}</p><p className="mt-0.5 max-w-64 truncate text-[10px] text-zinc-600">{asset.storageKey}</p></div><Status value={asset.status} /></div>)}</div>}
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-black/20 p-5">
-                      <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Social drafts</h4><span className="text-xs text-zinc-600">English only</span></div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {["X", "LINKEDIN"].map((platform) => {
+                    <div className="mt-5 rounded-2xl border border-white/8 bg-black/20 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-medium">Social review</h4><p className="mt-1 text-xs text-zinc-600">Compare and edit each English draft independently.</p></div><span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">Review only · publishing disabled</span></div>
+                      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                        {(["X", "LINKEDIN"] as const).map((platform) => {
                           const draft = run.socialDrafts.find((item) => item.platform === platform);
-                          return <div key={platform} className="rounded-xl border border-white/8 p-3"><div className="flex items-center justify-between"><p className="text-xs font-semibold">{platform === "LINKEDIN" ? "LinkedIn" : "X"}</p>{draft ? <Status value={draft.status} /> : <span className="text-[10px] text-zinc-600">Not generated</span>}</div>{draft && <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-zinc-500">{draft.content}</p>}{draft?.publishedPostUrl && <a className="mt-3 inline-block text-xs text-violet-400" href={draft.publishedPostUrl} target="_blank" rel="noreferrer">View published post ↗</a>}</div>;
+                          const draftMentions = mentions(draft?.mentions);
+                          const draftEvidence = evidence(draft?.evidence);
+                          return <section key={platform} className="rounded-2xl border border-white/8 bg-[#111114] p-5">
+                            <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">{platform === "LINKEDIN" ? "LinkedIn" : "X"}</p><p className="mt-1 text-[11px] text-zinc-600">{platform === "LINKEDIN" ? "Formal product narrative" : "Concise launch update"}</p></div>{draft ? <Status value={draft.status} /> : <span className="text-[10px] text-zinc-600">Not generated</span>}</div>
+                            {draft ? <>
+                              <SocialDraftEditor draftId={draft.id} platform={platform} initialContent={draft.content} />
+                              {draft.repositoryUrl && <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Repository</p><a className="mt-2 block break-all text-xs text-violet-400 hover:text-violet-300" href={draft.repositoryUrl} target="_blank" rel="noreferrer">{draft.repositoryUrl} ↗</a></div>}
+                              <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Suggested mentions</p>{draftMentions.length ? <ul className="mt-2 space-y-2">{draftMentions.map((mention) => <li className="rounded-lg bg-white/[0.03] p-3 text-xs" key={`${mention.identity}-${mention.reason}`}><span className="font-medium text-zinc-300">{mention.identity}</span><span className="text-zinc-600"> — {mention.reason}</span></li>)}</ul> : <p className="mt-2 text-xs text-zinc-600">No verified mentions suggested.</p>}</div>
+                              <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Verified evidence used</p>{draftEvidence.length ? <ul className="mt-2 space-y-2">{draftEvidence.map((claim) => <li className="rounded-lg border border-white/6 p-3" key={claim.id}><p className="text-xs leading-5 text-zinc-400">{claim.statement}</p><p className="mt-1 break-all font-mono text-[10px] text-zinc-700">{claim.evidenceStorageKey}</p></li>)}</ul> : <p className="mt-2 text-xs text-zinc-600">No evidence provenance available.</p>}</div>
+                            </> : <p className="mt-5 text-sm text-zinc-600">This draft will appear after the verified recording finishes.</p>}
+                          </section>;
                         })}
                       </div>
                     </div>

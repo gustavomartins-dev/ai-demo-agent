@@ -27,4 +27,13 @@ describe("workspace authorization boundaries", () => {
     expect(source).toContain("if (!session?.user?.id)");
     expect(source).toContain("createProject(session.user.id");
   });
+
+  it("rechecks authenticated ownership for every social draft edit", async () => {
+    const actions = await readFile(actionsPath, "utf8");
+    const projects = await readFile(projectsPath, "utf8");
+    expect(actions).toContain("updateOwnedSocialDraft(");
+    expect(actions).toContain("session.user.id");
+    expect(projects).toContain('generationRun: { project: { ownerId } }');
+    expect(projects).toContain("transaction.socialDraft.updateMany");
+  });
 });

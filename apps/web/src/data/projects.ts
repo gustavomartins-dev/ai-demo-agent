@@ -38,7 +38,18 @@ export type ProjectDetail = {
     maxAttempts: number;
     nextAttemptAt: string;
     assets: Array<{ id: string; type: string; status: string; storageKey: string; mimeType: string }>;
-    socialDrafts: Array<{ id: string; platform: string; status: string; content: string; publishedPostUrl: string | null }>;
+    socialDrafts: Array<{
+      id: string;
+      platform: string;
+      status: string;
+      language: string;
+      content: string;
+      mentions: unknown;
+      repositoryUrl: string | null;
+      claimIds: unknown;
+      evidence: unknown;
+      publishedPostUrl: string | null;
+    }>;
   }>;
 };
 
@@ -130,7 +141,21 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
           maxAttempts: true,
           nextAttemptAt: true,
           assets: { orderBy: { createdAt: "asc" }, select: { id: true, type: true, status: true, storageKey: true, mimeType: true } },
-          socialDrafts: { orderBy: { platform: "asc" }, select: { id: true, platform: true, status: true, content: true, publishedPostUrl: true } },
+          socialDrafts: {
+            orderBy: { platform: "asc" },
+            select: {
+              id: true,
+              platform: true,
+              status: true,
+              language: true,
+              content: true,
+              mentions: true,
+              repositoryUrl: true,
+              claimIds: true,
+              evidence: true,
+              publishedPostUrl: true,
+            },
+          },
         },
       },
     },
@@ -150,6 +175,26 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
       socialDrafts: run.socialDrafts.map((draft) => ({ ...draft, platform: draft.platform, status: draft.status })),
     })),
   };
+}
+
+export async function updateOwnedSocialDraft(
+  ownerId: string,
+  draftId: string,
+  platform: "X" | "LINKEDIN",
+  content: string,
+): Promise<{ projectId: string } | null> {
+  return db.$transaction(async (transaction) => {
+    const draft = await transaction.socialDraft.findFirst({
+      where: { id: draftId, platform, generationRun: { project: { ownerId } } },
+      select: { generationRun: { select: { projectId: true } } },
+    });
+    if (!draft) return null;
+    const updated = await transaction.socialDraft.updateMany({
+      where: { id: draftId, platform, generationRun: { project: { ownerId } } },
+      data: { content, status: "DRAFT", approvedAt: null },
+    });
+    return updated.count === 1 ? { projectId: draft.generationRun.projectId } : null;
+  });
 }
 
 export async function retryFailedGenerationRun(
