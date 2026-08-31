@@ -39,11 +39,11 @@ export async function claimGenerationRun(
 
     const claimed = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       WITH candidate AS (
-        SELECT "id"
+        SELECT "id", "status"
         FROM "GenerationRun"
         WHERE "attemptCount" < "maxAttempts"
           AND (
-            ("status" = 'QUEUED' AND "nextAttemptAt" <= ${now})
+            ("status" IN ('QUEUED', 'PLANNED') AND "nextAttemptAt" <= ${now})
             OR (
               "status" IN ('ANALYZING', 'PLANNING', 'RECORDING', 'DRAFTING')
               AND "leaseExpiresAt" < ${now}
@@ -54,7 +54,10 @@ export async function claimGenerationRun(
         LIMIT 1
       )
       UPDATE "GenerationRun" AS run
-      SET "status" = 'ANALYZING'::"RunStatus",
+      SET "status" = CASE
+            WHEN candidate."status" = 'PLANNED' THEN 'RECORDING'::"RunStatus"
+            ELSE 'ANALYZING'::"RunStatus"
+          END,
           "workerId" = ${workerId},
           "leaseExpiresAt" = ${leaseExpiresAt},
           "lastHeartbeatAt" = ${now},
@@ -106,7 +109,7 @@ export async function markGenerationRunFailed(
   return db.$transaction(async (transaction) => {
     const run = await transaction.generationRun.findFirst({
       where: { id: runId, workerId },
-      select: { attemptCount: true, maxAttempts: true },
+      select: { attemptCount: true, maxAttempts: true, plan: true },
     });
     if (!run) return "lost-lease";
 
@@ -123,7 +126,7 @@ export async function markGenerationRunFailed(
             lastHeartbeatAt: null,
           }
         : {
-            status: "QUEUED",
+            status: run.plan ? "PLANNED" : "QUEUED",
             error,
             nextAttemptAt: new Date(now.getTime() + retryDelayMs(run.attemptCount)),
             workerId: null,

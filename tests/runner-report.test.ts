@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { runDemoWithReport, type DemoExecutionReport } from "../src/runner.js";
+import { DemoRunError, runDemoWithReport, type DemoExecutionReport } from "../src/runner.js";
 
 describe("Playwright execution evidence", () => {
   it("writes a passed report and screenshot for a visual assertion", async () => {
@@ -26,11 +26,13 @@ describe("Playwright execution evidence", () => {
   it("writes a failed report before propagating a browser error", async () => {
     const outputRoot = await mkdtemp(path.join(os.tmpdir(), "ai-demo-run-"));
 
-    await expect(runDemoWithReport({
+    const failure = await runDemoWithReport({
       name: "failure-test",
       viewport: { width: 640, height: 360 },
       steps: [{ action: "goto", url: "http://127.0.0.1:1/unavailable" }]
-    }, outputRoot)).rejects.toThrow();
+    }, outputRoot).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(DemoRunError);
+    expect((failure as DemoRunError).artifacts.report.status).toBe("failed");
 
     const [runDirectory] = await readdir(outputRoot);
     const reportPath = path.join(outputRoot, runDirectory!, "execution-report.json");

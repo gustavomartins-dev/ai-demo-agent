@@ -29,6 +29,19 @@ export type DemoRunResult = {
   report: DemoExecutionReport;
 };
 
+export type DemoFailureArtifacts = {
+  videoPath: string | null;
+  reportPath: string;
+  report: DemoExecutionReport;
+};
+
+export class DemoRunError extends Error {
+  constructor(message: string, readonly artifacts: DemoFailureArtifacts, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "DemoRunError";
+  }
+}
+
 function locate(page: Page, target: DemoTarget): Locator {
   if (target.testId) return page.getByTestId(target.testId);
   if (target.role) return page.getByRole(target.role as never, target.name ? { name: target.name } : undefined);
@@ -143,7 +156,13 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
   const reportPath = path.join(outputDir, "execution-report.json");
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
-  if (executionError) throw executionError;
+  if (executionError) {
+    throw new DemoRunError(errorMessage(executionError), {
+      videoPath: videoSaved ? videoPath : null,
+      reportPath,
+      report,
+    }, { cause: executionError });
+  }
   return { videoPath, reportPath, report };
 }
 
