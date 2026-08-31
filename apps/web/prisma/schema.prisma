@@ -135,22 +135,30 @@ model Project {
 }
 
 model GenerationRun {
-  id           String        @id @default(cuid())
-  projectId    String
-  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  objective    String
-  status       RunStatus     @default(QUEUED)
-  plan         Json?
-  error        String?
-  assets       MediaAsset[]
-  socialDrafts SocialDraft[]
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  objective       String
+  status          RunStatus     @default(QUEUED)
+  plan            Json?
+  error           String?
+  attemptCount    Int           @default(0)
+  maxAttempts     Int           @default(3)
+  workerId        String?
+  leaseExpiresAt  DateTime?
+  lastHeartbeatAt DateTime?
+  nextAttemptAt   DateTime      @default(now())
+  assets          MediaAsset[]
+  socialDrafts    SocialDraft[]
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([projectId, createdAt])
   @@index([status])
+  @@index([status, nextAttemptAt])
+  @@index([leaseExpiresAt])
 }
 
 model MediaAsset {
