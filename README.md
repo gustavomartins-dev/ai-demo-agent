@@ -28,6 +28,8 @@ npm run db:migrate
 ```
 
 O modelo completo está documentado em [docs/data-model.md](docs/data-model.md).
+A arquitetura e o runbook da aplicação estão em
+[docs/web-foundation.md](docs/web-foundation.md).
 
 ## Visão
 
