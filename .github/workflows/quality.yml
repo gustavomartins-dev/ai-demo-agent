@@ -51,6 +51,20 @@ jobs:
       - name: Validate Prisma schema
         run: npm run db:validate
 
+      - name: Validate production configuration contract
+        run: npm run validate:production
+        env:
+          NODE_ENV: production
+          APP_BASE_URL: https://ci.example.com
+          SOCIAL_TOKEN_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+          SOCIAL_TOKEN_ENCRYPTION_KEY_ID: ci-v1
+          X_CLIENT_ID: ci-x-client
+          LINKEDIN_CLIENT_ID: ci-linkedin-client
+          LINKEDIN_CLIENT_SECRET: ci-linkedin-secret
+          LINKEDIN_API_VERSION: "202608"
+          AI_DEMO_OUTPUT_ROOT: /var/lib/ai-demo-agent/output
+          AI_DEMO_HERMES_COMMAND: /usr/local/bin/hermes
+
       - name: Apply migrations to clean PostgreSQL
         run: npm run db:deploy
 

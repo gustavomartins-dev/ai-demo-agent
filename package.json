@@ -24,7 +24,8 @@
     "db:studio": "npm run db:studio --workspace @ai-demo-agent/web",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:social-safety": "vitest run tests/social-oauth-foundation.test.ts tests/social-oauth-connections.test.ts tests/social-approval.test.ts tests/social-publishing.test.ts tests/social-publishing-runbook.test.ts"
+    "test:social-safety": "vitest run tests/social-oauth-foundation.test.ts tests/social-oauth-connections.test.ts tests/social-approval.test.ts tests/social-publishing.test.ts tests/social-publishing-runbook.test.ts",
+    "validate:production": "tsx scripts/validate-production-config.ts"
   },
   "engines": {
     "node": ">=20"

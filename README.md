@@ -40,6 +40,8 @@ A fundação segura de OAuth para X e LinkedIn está em
 [docs/social-oauth.md](docs/social-oauth.md).
 A aprovação explícita, publicação idempotente e resposta a incidentes estão em
 [docs/social-publishing.md](docs/social-publishing.md).
+O mapa de deploy, health checks, backups, métricas e checklist de lançamento
+está em [docs/production-deployment.md](docs/production-deployment.md).
 
 ## Visão
 
