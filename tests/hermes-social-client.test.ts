@@ -55,4 +55,16 @@ describe("Hermes social client", () => {
     );
     await expect(client.createDrafts(context)).rejects.toBeInstanceOf(HermesSocialClientError);
   });
+
+  it("rejects Portuguese content mislabeled as English", async () => {
+    const invalid = {
+      ...bundle,
+      x: { ...bundle.x, content: "Este projeto foi feito para mostrar como funciona. https://github.com/example/ai-demo-agent" },
+    };
+    const client = new HermesSocialClient(
+      { command: "hermes", timeoutMs: 2_000 },
+      vi.fn().mockResolvedValue({ stdout: JSON.stringify(invalid), stderr: "" }),
+    );
+    await expect(client.createDrafts(context)).rejects.toThrow(/english_only/);
+  });
 });

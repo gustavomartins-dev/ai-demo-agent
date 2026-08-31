@@ -34,6 +34,8 @@ O login privado e a configuração do GitHub OAuth estão em
 [docs/workspace-authentication.md](docs/workspace-authentication.md).
 O processamento Hermes + Playwright e sua operação estão em
 [docs/generation-worker.md](docs/generation-worker.md).
+Os evals e o runbook de qualidade dos posts estão em
+[docs/social-draft-quality.md](docs/social-draft-quality.md).
 
 ## Visão
 

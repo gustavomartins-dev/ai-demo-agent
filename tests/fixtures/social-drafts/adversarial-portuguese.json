@@ -1,0 +1,16 @@
+{
+  "x": {
+    "platform": "X",
+    "language": "en",
+    "content": "Este projeto foi feito para mostrar como funciona. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-2"],
+    "mentions": []
+  },
+  "linkedin": {
+    "platform": "LINKEDIN",
+    "language": "en",
+    "content": "Esta aplicação foi feita com uma experiência verificada. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-2"],
+    "mentions": []
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "x": {
+    "platform": "X",
+    "language": "en",
+    "content": "A verified review workflow, captured with browser evidence. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-2"],
+    "mentions": [{ "identity": "@builder", "reason": "Repository contributor" }]
+  },
+  "linkedin": {
+    "platform": "LINKEDIN",
+    "language": "en",
+    "content": "I built a review workflow and verified the result through a reproducible browser run. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-2"],
+    "mentions": []
+  }
+}

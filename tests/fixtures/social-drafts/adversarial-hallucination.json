@@ -1,0 +1,16 @@
+{
+  "x": {
+    "platform": "X",
+    "language": "en",
+    "content": "Now with invented analytics. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-999"],
+    "mentions": [{ "identity": "@famous_person", "reason": "Probably interested" }]
+  },
+  "linkedin": {
+    "platform": "LINKEDIN",
+    "language": "en",
+    "content": "The product now includes enterprise analytics. https://github.com/example/ai-demo-agent",
+    "claimIds": ["claim-999"],
+    "mentions": []
+  }
+}

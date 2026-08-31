@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { HermesConfig } from "../hermes/config.js";
+import { evaluateSocialDraftBundle } from "./evals.js";
 import {
   validateDraftBundleAgainstContext,
   verifiedSocialContextSchema,
@@ -74,7 +75,13 @@ export class HermesSocialClient {
       throw new HermesSocialClientError(result.stderr.trim() || "Hermes did not return social drafts");
     }
     try {
-      return validateDraftBundleAgainstContext(parseJson(result.stdout), context);
+      const bundle = validateDraftBundleAgainstContext(parseJson(result.stdout), context);
+      const evaluation = evaluateSocialDraftBundle(bundle, context);
+      if (!evaluation.passed) {
+        const failed = evaluation.checks.filter((check) => !check.passed).map((check) => check.name).join(", ");
+        throw new HermesSocialClientError(`Hermes drafts failed quality checks: ${failed}`);
+      }
+      return bundle;
     } catch (error) {
       if (error instanceof HermesSocialClientError) throw error;
       throw new HermesSocialClientError("Hermes returned drafts that violate the verified social contract", { cause: error });
