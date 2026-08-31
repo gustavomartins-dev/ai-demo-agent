@@ -115,6 +115,12 @@ persistent volume shared with whichever service will serve review downloads.
 Object storage such as S3 or Cloudflare R2 can later replace the volume without
 changing the generation lifecycle.
 
+The owner review page accesses local artifacts through `/api/media/:assetId`.
+The endpoint resolves ownership from PostgreSQL, accepts only `READY` assets,
+contains storage keys within `AI_DEMO_OUTPUT_ROOT`, disables shared caching, and
+supports byte ranges so browsers can seek through WebM video. The artifact
+volume itself must never be mounted as a public static directory.
+
 Deploy the web process and worker process from the same commit and apply
 migrations before either starts. Only the worker needs Hermes and Chromium.
 The web process needs access to PostgreSQL and, until object storage is added,

@@ -13,10 +13,10 @@ describe("social draft review", () => {
     expect(() => socialDraftEditSchema.parse({ draftId: "draft-linkedin", platform: "LINKEDIN", content: "x".repeat(3_001) })).toThrow(/3,000/);
   });
 
-  it("shows provenance and explicitly keeps publishing disabled", async () => {
+  it("shows provenance and requires explicit approval and publishing", async () => {
     const source = await readFile(pagePath, "utf8");
     expect(source).toContain("Verified evidence used");
     expect(source).toContain("Suggested mentions");
-    expect(source).toContain("Review only · publishing disabled");
+    expect(source).toContain("Explicit approval and publish required");
   });
 });
