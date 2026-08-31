@@ -2,6 +2,12 @@ import { z } from "zod";
 
 export type SocialOAuthPlatform = "X" | "LINKEDIN";
 
+export function parseSocialOAuthPlatform(value: string): SocialOAuthPlatform | null {
+  if (value.toLowerCase() === "x") return "X";
+  if (value.toLowerCase() === "linkedin") return "LINKEDIN";
+  return null;
+}
+
 const environmentSchema = z.object({
   APP_BASE_URL: z.string().url(),
   X_CLIENT_ID: z.string().trim().min(1).optional(),

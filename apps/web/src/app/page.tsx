@@ -17,10 +17,21 @@ function readableStatus(status: string | null): string {
   return (status ?? "Not started").toLowerCase().replaceAll("_", " ");
 }
 
-export default async function Home() {
+const socialMessages: Record<string, string> = {
+  connected: "Account connected and identity verified.",
+  denied: "Connection was cancelled at the provider.",
+  invalid_state: "This connection link is invalid or expired. Start again.",
+  missing_code: "The provider did not return an authorization code.",
+  provider_error: "The provider could not complete the connection. Check permissions and try again.",
+  configuration_error: "This provider is not configured on the server yet.",
+};
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ social?: string; platform?: string }> }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login?callbackUrl=/");
   const dashboard = await getDashboardData(session.user.id);
+  const connections = dashboard.databaseConfigured ? await getSocialAccountConnections(session.user.id) : [];
+  const query = await searchParams;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
@@ -41,8 +52,7 @@ export default async function Home() {
           <div className="mt-auto rounded-2xl border border-white/8 bg-white/[0.03] p-4">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Connections</p>
             <div className="mt-3 space-y-2 text-sm">
-              <div className="flex items-center justify-between"><span>LinkedIn</span><span className="text-zinc-600">Not connected</span></div>
-              <div className="flex items-center justify-between"><span>X</span><span className="text-zinc-600">Not connected</span></div>
+              {(["LINKEDIN", "X"] as const).map((platform) => { const account = connections.find((item) => item.platform === platform); return <a className="flex items-center justify-between hover:text-violet-300" href="#connections" key={platform}><span>{platform === "LINKEDIN" ? "LinkedIn" : "X"}</span><span className={account?.status === "CONNECTED" ? "text-emerald-400" : account?.status === "EXPIRED" ? "text-amber-300" : "text-zinc-600"}>{(account?.status ?? "Not connected").toLowerCase()}</span></a>; })}
             </div>
           </div>
         </aside>
@@ -67,6 +77,10 @@ export default async function Home() {
               PostgreSQL is not configured yet. Follow <code className="rounded bg-black/30 px-1.5 py-1 text-xs">apps/web/.env.example</code> to enable project creation.
             </div>
           )}
+
+          {query.social && socialMessages[query.social] && <div className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${query.social === "connected" ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200" : "border-amber-400/20 bg-amber-400/[0.06] text-amber-100"}`}>{query.platform ? `${query.platform === "linkedin" ? "LinkedIn" : "X"}: ` : ""}{socialMessages[query.social]}</div>}
+
+          <SocialConnections connections={connections} />
 
           <section id="new-project" className="mt-6 rounded-3xl border border-white/8 bg-[#111114] p-6">
             <div className="mb-6"><p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-400">New launch</p><h2 className="mt-2 text-lg font-semibold">Add a project</h2><p className="mt-1 text-sm text-zinc-500">The first run will be queued with your launch objective.</p></div>
@@ -122,3 +136,5 @@ import { auth } from "@/auth";
 import { getDashboardData } from "@/data/projects";
 import { ProjectForm } from "./project-form";
 import { AccountMenu } from "./account-menu";
+import { SocialConnections } from "./social-connections";
+import { getSocialAccountConnections } from "@/data/social-accounts";

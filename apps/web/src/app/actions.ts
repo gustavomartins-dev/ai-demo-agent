@@ -5,6 +5,8 @@ import { auth } from "@/auth";
 import { createProject, retryFailedGenerationRun, updateOwnedSocialDraft } from "@/data/projects";
 import { projectInputFromFormData, projectInputSchema } from "@/lib/project-input";
 import { socialDraftEditFromFormData, socialDraftEditSchema } from "@/lib/social-draft-input";
+import { disconnectOwnedSocialAccount } from "@/data/social-accounts";
+import { parseSocialOAuthPlatform } from "@/lib/social-oauth/config";
 
 export type CreateProjectState = {
   status: "idle" | "error" | "success";
@@ -77,4 +79,14 @@ export async function retryGenerationRunAction(formData: FormData): Promise<void
   if (!retried) throw new Error("This failed generation run is no longer available for retry");
   revalidatePath("/");
   revalidatePath(`/projects/${retried.projectId}`);
+}
+
+export async function disconnectSocialAccountAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Authentication required");
+  const platformValue = formData.get("platform");
+  const platform = typeof platformValue === "string" ? parseSocialOAuthPlatform(platformValue) : null;
+  if (!platform) throw new Error("Invalid social platform");
+  await disconnectOwnedSocialAccount(session.user.id, platform);
+  revalidatePath("/");
 }

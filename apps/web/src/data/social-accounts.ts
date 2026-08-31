@@ -3,6 +3,7 @@ import type { SocialPlatform } from "@prisma/client";
 import type { SocialOAuthStart } from "@/lib/social-oauth/flow";
 import { decryptSecret, encryptSecret, type TokenEncryptionConfig } from "@/lib/social-oauth/crypto";
 import { db } from "@/lib/db";
+import { effectiveSocialAccountStatus } from "@/lib/social-oauth/account-status";
 
 export type ConnectedAccountInput = {
   externalAccountId: string;
@@ -114,7 +115,7 @@ export async function saveConnectedSocialAccount(
 }
 
 export async function getSocialAccountConnections(userId: string) {
-  return db.socialAccount.findMany({
+  const accounts = await db.socialAccount.findMany({
     where: { userId },
     orderBy: { platform: "asc" },
     select: {
@@ -128,5 +129,31 @@ export async function getSocialAccountConnections(userId: string) {
       authorizationExpiresAt: true,
       connectedAt: true,
     },
+  });
+  const now = new Date();
+  return accounts.map((account) => ({
+    ...account,
+    status: effectiveSocialAccountStatus(account.status, account.authorizationExpiresAt, now),
+  }));
+}
+
+export async function disconnectOwnedSocialAccount(userId: string, platform: SocialPlatform): Promise<boolean> {
+  return db.$transaction(async (transaction) => {
+    const account = await transaction.socialAccount.findFirst({ where: { userId, platform }, select: { id: true } });
+    if (!account) return false;
+    await transaction.socialCredential.deleteMany({ where: { socialAccountId: account.id } });
+    const disconnected = await transaction.socialAccount.updateMany({
+      where: { id: account.id, userId, platform },
+      data: {
+        status: "DISCONNECTED",
+        externalAccountId: null,
+        displayName: null,
+        handle: null,
+        scopes: [],
+        authorizationExpiresAt: null,
+        connectedAt: null,
+      },
+    });
+    return disconnected.count === 1;
   });
 }

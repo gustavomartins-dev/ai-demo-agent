@@ -84,8 +84,36 @@ If the key is exposed, disable publishing, rotate/revoke provider tokens,
 remove affected credentials, configure a new encryption key ID, and reconnect
 the accounts. Do not log decrypted values during recovery.
 
+## Connection lifecycle
+
+The dashboard offers **Connect**, **Reconnect**, and **Disconnect** independently
+for X and LinkedIn. Start routes and callbacks require the authenticated
+workspace owner. After token exchange, the server verifies the real identity
+using [X `GET /2/users/me`](https://docs.x.com/x-api/users/get-my-user) or
+LinkedIn OpenID Connect `GET /v2/userinfo`; browser callback parameters are
+never trusted as profile identity.
+
+Disconnect deletes the local `SocialCredential` first, then clears public
+identity, scopes, expiry, and connection timestamps. It does not revoke the
+provider application's authorization remotely. Use the provider's connected
+apps settings when remote revocation is required.
+
+The workspace derives `EXPIRED` when the recorded authorization expiry is in
+the past. Reconnect starts a new authorization transaction and replaces the
+credential only after identity verification succeeds.
+
+Callback results shown in the dashboard:
+
+| Result | Recovery |
+| --- | --- |
+| `denied` | The owner cancelled consent; start Connect again when ready |
+| `invalid_state` | State was missing, expired, already consumed, or did not belong to the owner; start a fresh connection |
+| `missing_code` | Provider callback was incomplete; start again |
+| `provider_error` | Verify provider product access, scopes, callback URL, and API availability |
+| `configuration_error` | Configure the platform client and encryption environment variables |
+
 ## Current boundary
 
-The schemas, encryption, provider configuration, PKCE generation, and one-time
-attempt storage are ready. Issue #32 will add owner-only start/callback routes,
-token exchange, external identity verification, reconnect, and disconnect.
+Real account connection and local disconnection are implemented. Publishing is
+still impossible. Issue #33 adds explicit approval of immutable draft snapshots
+before any provider create-post API is introduced.
