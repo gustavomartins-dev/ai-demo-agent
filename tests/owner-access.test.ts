@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isWorkspaceOwner } from "../apps/web/src/lib/owner-access";
+import { isWorkspaceOwner } from "../apps/web/src/lib/owner-access.js";
 
 describe("isWorkspaceOwner", () => {
   it("allows the configured GitHub login without case sensitivity", () => {
