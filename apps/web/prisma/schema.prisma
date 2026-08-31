@@ -77,6 +77,7 @@ model User {
   projects       Project[]
   socialAccounts SocialAccount[]
   socialOAuthAttempts SocialOAuthAttempt[]
+  approvedSocialDrafts SocialDraft[] @relation("SocialDraftApprover")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -194,12 +195,17 @@ model SocialDraft {
   publishedPostId  String?
   publishedPostUrl String?
   approvedAt       DateTime?
+  approvedContent  String?
+  approvedContentHash String?
+  approvedByUserId String?
+  approvedBy       User?          @relation("SocialDraftApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   publishedAt      DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
   @@unique([generationRunId, platform])
   @@index([status])
+  @@index([approvedByUserId])
 }
 
 model SocialAccount {

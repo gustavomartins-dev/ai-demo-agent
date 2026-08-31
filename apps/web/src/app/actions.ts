@@ -7,6 +7,7 @@ import { projectInputFromFormData, projectInputSchema } from "@/lib/project-inpu
 import { socialDraftEditFromFormData, socialDraftEditSchema } from "@/lib/social-draft-input";
 import { disconnectOwnedSocialAccount } from "@/data/social-accounts";
 import { parseSocialOAuthPlatform } from "@/lib/social-oauth/config";
+import { approveOwnedSocialDraft } from "@/data/social-drafts";
 
 export type CreateProjectState = {
   status: "idle" | "error" | "success";
@@ -15,6 +16,21 @@ export type CreateProjectState = {
 };
 
 export type SaveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
+export type ApproveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
+
+export async function approveSocialDraftAction(
+  _previousState: ApproveSocialDraftState,
+  formData: FormData,
+): Promise<ApproveSocialDraftState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const draftId = formData.get("draftId");
+  if (typeof draftId !== "string" || !draftId.trim()) return { status: "error", message: "Invalid draft." };
+  const approved = await approveOwnedSocialDraft(session.user.id, draftId);
+  if (!approved) return { status: "error", message: "Connect the matching account and verify draft evidence before approval." };
+  revalidatePath(`/projects/${approved.projectId}`);
+  return { status: "success", message: `${approved.platform === "LINKEDIN" ? "LinkedIn" : "X"} draft approved. Nothing was published.` };
+}
 
 export async function saveSocialDraftAction(
   _previousState: SaveSocialDraftState,

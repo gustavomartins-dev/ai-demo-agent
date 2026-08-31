@@ -48,6 +48,8 @@ export type ProjectDetail = {
       repositoryUrl: string | null;
       claimIds: unknown;
       evidence: unknown;
+      approvedAt: string | null;
+      approvedContentHash: string | null;
       publishedPostUrl: string | null;
     }>;
   }>;
@@ -153,6 +155,8 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
               repositoryUrl: true,
               claimIds: true,
               evidence: true,
+              approvedAt: true,
+              approvedContentHash: true,
               publishedPostUrl: true,
             },
           },
@@ -172,7 +176,7 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
       completedAt: run.completedAt?.toISOString() ?? null,
       nextAttemptAt: run.nextAttemptAt.toISOString(),
       assets: run.assets.map((asset) => ({ ...asset, type: asset.type, status: asset.status })),
-      socialDrafts: run.socialDrafts.map((draft) => ({ ...draft, platform: draft.platform, status: draft.status })),
+      socialDrafts: run.socialDrafts.map((draft) => ({ ...draft, platform: draft.platform, status: draft.status, approvedAt: draft.approvedAt?.toISOString() ?? null })),
     })),
   };
 }
@@ -191,7 +195,7 @@ export async function updateOwnedSocialDraft(
     if (!draft) return null;
     const updated = await transaction.socialDraft.updateMany({
       where: { id: draftId, platform, generationRun: { project: { ownerId } } },
-      data: { content, status: "DRAFT", approvedAt: null },
+      data: { content, status: "DRAFT", approvedAt: null, approvedByUserId: null, approvedContent: null, approvedContentHash: null },
     });
     return updated.count === 1 ? { projectId: draft.generationRun.projectId } : null;
   });

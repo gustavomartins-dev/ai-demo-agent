@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 import type { SocialDraftBundle, VerifiedSocialContext } from "../../../../src/social/contract.js";
-import { db } from "../lib/db.js";
+import { db } from "@/lib/db";
+import { socialContentHash } from "@/lib/social-approval";
 
 export async function saveSocialDraftBundle(
   runId: string,
@@ -39,6 +40,9 @@ export async function saveSocialDraftBundle(
           evidence: evidence as Prisma.InputJsonValue,
           repositoryUrl: context.project.isOpenSource ? context.project.repositoryUrl : null,
           approvedAt: null,
+          approvedByUserId: null,
+          approvedContent: null,
+          approvedContentHash: null,
         },
       });
     }
@@ -56,5 +60,47 @@ export async function saveSocialDraftBundle(
     });
     await transaction.project.update({ where: { id: owned.projectId }, data: { status: "REVIEW" } });
     return true;
+  });
+}
+
+export async function approveOwnedSocialDraft(
+  ownerId: string,
+  draftId: string,
+  now = new Date(),
+): Promise<{ projectId: string; platform: "X" | "LINKEDIN" } | null> {
+  return db.$transaction(async (transaction) => {
+    const draft = await transaction.socialDraft.findFirst({
+      where: { id: draftId, generationRun: { project: { ownerId } } },
+      select: {
+        id: true,
+        platform: true,
+        content: true,
+        evidence: true,
+        claimIds: true,
+        generationRun: { select: { projectId: true } },
+      },
+    });
+    if (!draft || !Array.isArray(draft.evidence) || draft.evidence.length === 0 || !Array.isArray(draft.claimIds) || draft.claimIds.length === 0) return null;
+    const account = await transaction.socialAccount.findFirst({
+      where: {
+        userId: ownerId,
+        platform: draft.platform,
+        status: "CONNECTED",
+        OR: [{ authorizationExpiresAt: null }, { authorizationExpiresAt: { gt: now } }],
+      },
+      select: { credential: { select: { id: true } } },
+    });
+    if (!account?.credential) return null;
+    const approved = await transaction.socialDraft.updateMany({
+      where: { id: draft.id, generationRun: { project: { ownerId } } },
+      data: {
+        status: "APPROVED",
+        approvedAt: now,
+        approvedByUserId: ownerId,
+        approvedContent: draft.content,
+        approvedContentHash: socialContentHash(draft.platform, draft.content),
+      },
+    });
+    return approved.count === 1 ? { projectId: draft.generationRun.projectId, platform: draft.platform } : null;
   });
 }

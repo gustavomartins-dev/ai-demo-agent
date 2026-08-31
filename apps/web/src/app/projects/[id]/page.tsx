@@ -5,6 +5,7 @@ import { getProjectDetail } from "@/data/projects";
 import { retryGenerationRunAction } from "@/app/actions";
 import { RetryButton } from "@/app/retry-button";
 import { SocialDraftEditor } from "@/app/social-draft-editor";
+import { SocialDraftApproval } from "@/app/social-draft-approval";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                             <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">{platform === "LINKEDIN" ? "LinkedIn" : "X"}</p><p className="mt-1 text-[11px] text-zinc-600">{platform === "LINKEDIN" ? "Formal product narrative" : "Concise launch update"}</p></div>{draft ? <Status value={draft.status} /> : <span className="text-[10px] text-zinc-600">Not generated</span>}</div>
                             {draft ? <>
                               <SocialDraftEditor draftId={draft.id} platform={platform} initialContent={draft.content} />
+                              <SocialDraftApproval draftId={draft.id} approvedAt={draft.approvedAt} />
                               {draft.repositoryUrl && <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Repository</p><a className="mt-2 block break-all text-xs text-violet-400 hover:text-violet-300" href={draft.repositoryUrl} target="_blank" rel="noreferrer">{draft.repositoryUrl} ↗</a></div>}
                               <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Suggested mentions</p>{draftMentions.length ? <ul className="mt-2 space-y-2">{draftMentions.map((mention) => <li className="rounded-lg bg-white/[0.03] p-3 text-xs" key={`${mention.identity}-${mention.reason}`}><span className="font-medium text-zinc-300">{mention.identity}</span><span className="text-zinc-600"> — {mention.reason}</span></li>)}</ul> : <p className="mt-2 text-xs text-zinc-600">No verified mentions suggested.</p>}</div>
                               <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Verified evidence used</p>{draftEvidence.length ? <ul className="mt-2 space-y-2">{draftEvidence.map((claim) => <li className="rounded-lg border border-white/6 p-3" key={claim.id}><p className="text-xs leading-5 text-zinc-400">{claim.statement}</p><p className="mt-1 break-all font-mono text-[10px] text-zinc-700">{claim.evidenceStorageKey}</p></li>)}</ul> : <p className="mt-2 text-xs text-zinc-600">No evidence provenance available.</p>}</div>

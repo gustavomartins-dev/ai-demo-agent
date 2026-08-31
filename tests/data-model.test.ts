@@ -17,6 +17,8 @@ describe("product data model", () => {
     expect(schema).toMatch(/language\s+String\s+@default\("en"\)/);
     expect(schema).toMatch(/claimIds\s+Json\?/);
     expect(schema).toMatch(/evidence\s+Json\?/);
+    expect(schema).toMatch(/approvedContentHash\s+String\?/);
+    expect(schema).toContain('@relation("SocialDraftApprover"');
   });
 
   it("keeps social publishing credentials out of SocialAccount", async () => {
