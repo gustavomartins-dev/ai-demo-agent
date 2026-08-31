@@ -56,7 +56,9 @@ describe("social token encryption", () => {
     const encrypted = encryptSecret("secret-access-token", config);
     expect(encrypted).not.toContain("secret-access-token");
     expect(decryptSecret(encrypted, config)).toBe("secret-access-token");
-    expect(() => decryptSecret(`${encrypted.slice(0, -1)}x`, config)).toThrow();
+    const parts = encrypted.split(".");
+    parts[2] = `${parts[2]?.startsWith("A") ? "B" : "A"}${parts[2]?.slice(1)}`;
+    expect(() => decryptSecret(parts.join("."), config)).toThrow();
   });
 
   it("requires an exact 32-byte base64 key", () => {
