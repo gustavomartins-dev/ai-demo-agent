@@ -8,6 +8,7 @@ import { socialDraftEditFromFormData, socialDraftEditSchema } from "@/lib/social
 import { disconnectOwnedSocialAccount } from "@/data/social-accounts";
 import { parseSocialOAuthPlatform } from "@/lib/social-oauth/config";
 import { approveOwnedSocialDraft } from "@/data/social-drafts";
+import { publishApprovedOwnedSocialDraft } from "@/data/social-publishing";
 
 export type CreateProjectState = {
   status: "idle" | "error" | "success";
@@ -17,6 +18,23 @@ export type CreateProjectState = {
 
 export type SaveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
 export type ApproveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
+export type PublishSocialDraftState = { status: "idle" | "error" | "success"; message: string; url?: string };
+
+export async function publishSocialDraftAction(
+  _previousState: PublishSocialDraftState,
+  formData: FormData,
+): Promise<PublishSocialDraftState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const draftId = formData.get("draftId");
+  if (typeof draftId !== "string" || !draftId.trim()) return { status: "error", message: "Invalid draft." };
+  const outcome = await publishApprovedOwnedSocialDraft(session.user.id, draftId);
+  if (outcome.projectId) revalidatePath(`/projects/${outcome.projectId}`);
+  if (outcome.status === "published") return { status: "success", message: "Post published successfully.", url: outcome.url };
+  if (outcome.status === "already_handled") return { status: "error", message: "This exact approval was already submitted. No duplicate was created.", ...(outcome.url ? { url: outcome.url } : {}) };
+  if (outcome.status === "failed") return { status: "error", message: `Publishing stopped safely (${outcome.code}). Review the connection before trying a newly approved version.` };
+  return { status: "error", message: "Publishing requires an unchanged approval and a valid matching account." };
+}
 
 export async function approveSocialDraftAction(
   _previousState: ApproveSocialDraftState,

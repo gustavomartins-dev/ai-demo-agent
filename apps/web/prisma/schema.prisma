@@ -66,6 +66,13 @@ enum DraftStatus {
   FAILED
 }
 
+enum PublishAttemptStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+}
+
 model User {
   id             String          @id @default(cuid())
   name           String?
@@ -199,6 +206,7 @@ model SocialDraft {
   approvedContentHash String?
   approvedByUserId String?
   approvedBy       User?          @relation("SocialDraftApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  publishAttempts  PublishAttempt[]
   publishedAt      DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -206,6 +214,24 @@ model SocialDraft {
   @@unique([generationRunId, platform])
   @@index([status])
   @@index([approvedByUserId])
+}
+
+model PublishAttempt {
+  id              String               @id @default(cuid())
+  socialDraftId   String
+  socialDraft     SocialDraft          @relation(fields: [socialDraftId], references: [id], onDelete: Cascade)
+  approvalHash    String
+  status          PublishAttemptStatus @default(STARTED)
+  providerPostId  String?
+  providerPostUrl String?
+  errorCode       String?
+  startedAt       DateTime             @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([socialDraftId, approvalHash])
+  @@index([status, startedAt])
 }
 
 model SocialAccount {

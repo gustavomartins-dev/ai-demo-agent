@@ -1,8 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 import type { SocialDraftBundle, VerifiedSocialContext } from "../../../../src/social/contract.js";
-import { db } from "@/lib/db";
-import { socialContentHash } from "@/lib/social-approval";
+import { db } from "../lib/db";
+import { socialContentHash } from "../lib/social-approval";
 
 export async function saveSocialDraftBundle(
   runId: string,

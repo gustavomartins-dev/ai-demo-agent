@@ -10,7 +10,7 @@ const migrationPath = new URL(
 describe("product data model", () => {
   it("models the complete launch pipeline", async () => {
     const schema = await readFile(schemaPath, "utf8");
-    for (const model of ["User", "Project", "GenerationRun", "MediaAsset", "SocialDraft", "SocialAccount", "SocialCredential", "SocialOAuthAttempt"]) {
+    for (const model of ["User", "Project", "GenerationRun", "MediaAsset", "SocialDraft", "SocialAccount", "SocialCredential", "SocialOAuthAttempt", "PublishAttempt"]) {
       expect(schema).toContain(`model ${model}`);
     }
     expect(schema).toContain("@@unique([generationRunId, platform])");
@@ -19,6 +19,7 @@ describe("product data model", () => {
     expect(schema).toMatch(/evidence\s+Json\?/);
     expect(schema).toMatch(/approvedContentHash\s+String\?/);
     expect(schema).toContain('@relation("SocialDraftApprover"');
+    expect(schema).toContain("@@unique([socialDraftId, approvalHash])");
   });
 
   it("keeps social publishing credentials out of SocialAccount", async () => {
