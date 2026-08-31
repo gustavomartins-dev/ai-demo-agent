@@ -1,9 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import { db } from "../apps/web/src/lib/db.js";
 import { socialContentHash } from "../apps/web/src/lib/social-approval.js";
 
-const db = new PrismaClient();
 const outputRoot = path.resolve(process.env.AI_DEMO_OUTPUT_ROOT ?? "/tmp/ai-demo-agent-e2e-output");
 const runDirectory = path.join(outputRoot, "e2e-run");
 
