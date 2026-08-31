@@ -47,12 +47,13 @@ Open `http://localhost:3000`.
 
 ## Current user journey
 
-1. Open the launch dashboard.
-2. Add a project name, product URL, optional repository, and launch objective.
-3. The server validates the request and creates `Project` plus its first queued
+1. Sign in with the configured workspace owner's GitHub account.
+2. Open the private launch dashboard.
+3. Add a project name, product URL, optional repository, and launch objective.
+4. The server validates the request and creates `Project` plus its first queued
    `GenerationRun` in one transaction.
-4. Open the project detail page to see run history.
-5. Media, evidence, X drafts, and LinkedIn drafts appear under their run as the
+5. Open the project detail page to see run history.
+6. Media, evidence, X drafts, and LinkedIn drafts appear under their run as the
    processing pipeline writes those records.
 
 The background worker that connects a queued run to Hermes and Playwright is
@@ -64,10 +65,12 @@ persistence and review UI from worker execution.
 - Prisma and environment variables are confined to server-only modules.
 - Browser components receive minimal DTOs rather than database records.
 - Server Action inputs are untrusted and validated with Zod.
-- Project details are scoped to the configured personal workspace owner.
-- No access token, refresh token, or OAuth client secret exists in the schema.
-- Production project creation is blocked until workspace authentication is
-  implemented.
+- GitHub OAuth is restricted by `APP_OWNER_GITHUB_LOGIN` and fails closed when
+  the owner is not configured.
+- Dashboard, project details, and Server Actions use the authenticated `User.id`.
+- Auth.js sessions and GitHub account records are stored server-side in
+  PostgreSQL; OAuth client secrets remain environment-only.
+- Social publishing credentials are not stored in `SocialAccount` yet.
 - X and LinkedIn approvals remain independent.
 - Generated social content defaults to English.
 
@@ -77,12 +80,12 @@ GitHub Actions runs Prisma validation, engine tests, both TypeScript checks,
 ESLint, the Next.js production build, Playwright browser tests, and a production
 dependency audit on every pull request and push to `main`.
 
-CI uses a syntactically valid placeholder `DATABASE_URL`; it does not connect to
-a database because the current quality suite validates schema, migrations,
-data contracts, compilation, and browser execution without persistent fixtures.
+CI starts PostgreSQL and applies every committed migration from an empty
+database. It also uses non-production Auth.js placeholders for compilation; no
+real OAuth credential is available to pull requests or builds.
 
 ## Next milestone
 
-The next foundation is workspace authentication followed by LinkedIn and X
-OAuth. Only after authenticated account ownership is established will
-production mutations and encrypted social credentials be enabled.
+The next foundation connects queued generation runs to Hermes and Playwright.
+LinkedIn and X OAuth follow behind the authenticated owner boundary, with
+encrypted publishing credentials and explicit approval before every post.

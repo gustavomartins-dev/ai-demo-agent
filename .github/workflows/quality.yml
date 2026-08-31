@@ -13,7 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_demo_agent_ci?schema=public
+      AUTH_SECRET: ci-only-auth-secret-not-used-in-production
+      AUTH_GITHUB_ID: ci-github-client-id
+      AUTH_GITHUB_SECRET: ci-github-client-secret
+      APP_OWNER_GITHUB_LOGIN: ci-owner
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ai_demo_agent_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ai_demo_agent_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,6 +50,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: npm run db:validate
+
+      - name: Apply migrations to clean PostgreSQL
+        run: npm run db:deploy
 
       - name: Run engine tests
         run: npm test

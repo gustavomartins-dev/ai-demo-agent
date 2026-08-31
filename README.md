@@ -30,6 +30,8 @@ npm run db:migrate
 O modelo completo está documentado em [docs/data-model.md](docs/data-model.md).
 A arquitetura e o runbook da aplicação estão em
 [docs/web-foundation.md](docs/web-foundation.md).
+O login privado e a configuração do GitHub OAuth estão em
+[docs/workspace-authentication.md](docs/workspace-authentication.md).
 
 ## Visão
 
