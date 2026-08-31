@@ -36,6 +36,15 @@ describe("Hermes integration contract", () => {
       demo: { name: "homepage", steps: [{ action: "wait", milliseconds: 100 }] }
     })).toThrow();
   });
+
+  it("accepts a remote repository URL as worker context", () => {
+    const request = hermesPlanningRequestSchema.parse({
+      url: "https://product.example.com",
+      objective: "Show the main workflow",
+      repository: { url: "https://github.com/example/product" },
+    });
+    expect(request.repository?.url).toBe("https://github.com/example/product");
+  });
 });
 
 describe("Hermes configuration", () => {
