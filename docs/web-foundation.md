@@ -56,9 +56,9 @@ Open `http://localhost:3000`.
 6. Media, evidence, X drafts, and LinkedIn drafts appear under their run as the
    processing pipeline writes those records.
 
-The background worker that connects a queued run to Hermes and Playwright is
-the next processing milestone. The current foundation deliberately separates
-persistence and review UI from worker execution.
+The standalone generation worker now connects queued runs to Hermes and
+Playwright. PostgreSQL leases keep processing outside web requests, while the
+project page exposes lifecycle state, attempts, evidence, and manual recovery.
 
 ## Security boundaries
 
@@ -86,6 +86,6 @@ real OAuth credential is available to pull requests or builds.
 
 ## Next milestone
 
-The next foundation connects queued generation runs to Hermes and Playwright.
-LinkedIn and X OAuth follow behind the authenticated owner boundary, with
-encrypted publishing credentials and explicit approval before every post.
+The next milestone generates distinct English X and LinkedIn drafts from the
+verified demo, followed by platform OAuth and explicit approval before every
+post.

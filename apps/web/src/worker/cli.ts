@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { claimGenerationRun, markGenerationRunFailed, renewGenerationRunLease } from "@/data/generation-queue";
 import { db } from "@/lib/db";
 import { loadGenerationWorkerConfig } from "@/worker/config";

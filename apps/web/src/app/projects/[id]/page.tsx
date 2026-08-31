@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getProjectDetail } from "@/data/projects";
+import { retryGenerationRunAction } from "@/app/actions";
+import { RetryButton } from "@/app/retry-button";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,16 @@ function tone(status: string): string {
 function Status({ value }: { value: string }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${tone(value)}`}>{label(value)}</span>;
 }
+
+const statusCopy: Record<string, string> = {
+  QUEUED: "Waiting for an available worker.",
+  ANALYZING: "The worker is preparing project context.",
+  PLANNING: "Hermes is building and validating the demo plan.",
+  PLANNED: "The validated plan is waiting for browser recording.",
+  RECORDING: "Playwright is recording the verified browser flow.",
+  READY_FOR_REVIEW: "Video and evidence are ready for your review.",
+  FAILED: "Processing stopped after the available automatic attempts.",
+};
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -50,9 +62,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 <article key={run.id} className="rounded-3xl border border-white/8 bg-[#111114] p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div><p className="text-xs text-zinc-600">Run #{project.runs.length - index} · {new Date(run.createdAt).toLocaleString("en-US")}</p><h3 className="mt-2 max-w-2xl font-medium leading-6">{run.objective}</h3></div>
-                    <Status value={run.status} />
+                    <div className="flex flex-col items-start gap-2 sm:items-end"><Status value={run.status} /><span className="text-[11px] text-zinc-600">Attempt {run.attemptCount} of {run.maxAttempts}</span></div>
                   </div>
+                  <p className="mt-4 text-xs text-zinc-500">{statusCopy[run.status] ?? "Generation is moving through the launch pipeline."}</p>
+                  {run.status === "QUEUED" && run.attemptCount > 0 && <p className="mt-1 text-[11px] text-zinc-600">Next automatic retry: {new Date(run.nextAttemptAt).toLocaleString("en-US")}</p>}
                   {run.error && <div className="mt-5 rounded-xl border border-rose-400/15 bg-rose-400/[0.06] p-4 text-sm text-rose-300">{run.error}</div>}
+                  {run.status === "FAILED" && <form action={retryGenerationRunAction} className="mt-4"><input name="runId" type="hidden" value={run.id} /><RetryButton /></form>}
 
                   <div className="mt-6 grid gap-5 lg:grid-cols-2">
                     <div className="rounded-2xl border border-white/8 bg-black/20 p-5">

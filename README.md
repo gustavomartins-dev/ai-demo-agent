@@ -32,6 +32,8 @@ A arquitetura e o runbook da aplicação estão em
 [docs/web-foundation.md](docs/web-foundation.md).
 O login privado e a configuração do GitHub OAuth estão em
 [docs/workspace-authentication.md](docs/workspace-authentication.md).
+O processamento Hermes + Playwright e sua operação estão em
+[docs/generation-worker.md](docs/generation-worker.md).
 
 ## Visão
 

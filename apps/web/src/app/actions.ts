@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { createProject } from "@/data/projects";
+import { createProject, retryFailedGenerationRun } from "@/data/projects";
 import { projectInputFromFormData, projectInputSchema } from "@/lib/project-input";
 
 export type CreateProjectState = {
@@ -42,4 +42,16 @@ export async function createProjectAction(
   await createProject(session.user.id, validated.data);
   revalidatePath("/");
   return { status: "success", message: "Project created and queued for analysis." };
+}
+
+export async function retryGenerationRunAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Authentication required");
+  const runId = formData.get("runId");
+  if (typeof runId !== "string" || !runId.trim()) throw new Error("Invalid generation run");
+
+  const retried = await retryFailedGenerationRun(session.user.id, runId);
+  if (!retried) throw new Error("This failed generation run is no longer available for retry");
+  revalidatePath("/");
+  revalidatePath(`/projects/${retried.projectId}`);
 }

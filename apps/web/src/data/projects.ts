@@ -34,6 +34,9 @@ export type ProjectDetail = {
     error: string | null;
     createdAt: string;
     completedAt: string | null;
+    attemptCount: number;
+    maxAttempts: number;
+    nextAttemptAt: string;
     assets: Array<{ id: string; type: string; status: string; storageKey: string; mimeType: string }>;
     socialDrafts: Array<{ id: string; platform: string; status: string; content: string; publishedPostUrl: string | null }>;
   }>;
@@ -123,6 +126,9 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
           error: true,
           createdAt: true,
           completedAt: true,
+          attemptCount: true,
+          maxAttempts: true,
+          nextAttemptAt: true,
           assets: { orderBy: { createdAt: "asc" }, select: { id: true, type: true, status: true, storageKey: true, mimeType: true } },
           socialDrafts: { orderBy: { platform: "asc" }, select: { id: true, platform: true, status: true, content: true, publishedPostUrl: true } },
         },
@@ -139,8 +145,39 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
       status: run.status,
       createdAt: run.createdAt.toISOString(),
       completedAt: run.completedAt?.toISOString() ?? null,
+      nextAttemptAt: run.nextAttemptAt.toISOString(),
       assets: run.assets.map((asset) => ({ ...asset, type: asset.type, status: asset.status })),
       socialDrafts: run.socialDrafts.map((draft) => ({ ...draft, platform: draft.platform, status: draft.status })),
     })),
   };
+}
+
+export async function retryFailedGenerationRun(
+  ownerId: string,
+  runId: string,
+): Promise<{ projectId: string } | null> {
+  return db.$transaction(async (transaction) => {
+    const run = await transaction.generationRun.findFirst({
+      where: { id: runId, status: "FAILED", project: { ownerId } },
+      select: { projectId: true, plan: true },
+    });
+    if (!run) return null;
+
+    const updated = await transaction.generationRun.updateMany({
+      where: { id: runId, status: "FAILED", project: { ownerId } },
+      data: {
+        status: run.plan ? "PLANNED" : "QUEUED",
+        attemptCount: 0,
+        nextAttemptAt: new Date(),
+        error: null,
+        completedAt: null,
+        workerId: null,
+        leaseExpiresAt: null,
+        lastHeartbeatAt: null,
+      },
+    });
+    if (updated.count !== 1) return null;
+    await transaction.project.update({ where: { id: run.projectId }, data: { status: "PROCESSING" } });
+    return { projectId: run.projectId };
+  });
 }
