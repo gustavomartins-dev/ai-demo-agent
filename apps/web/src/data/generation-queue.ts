@@ -1,5 +1,3 @@
-import "server-only";
-
 import { Prisma, type GenerationRun, type Project } from "@prisma/client";
 
 import { db } from "@/lib/db";

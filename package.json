@@ -13,6 +13,7 @@
     "plan": "tsx src/plan-cli.ts",
     "record-plan": "tsx src/record-plan-cli.ts",
     "dev:web": "npm run dev --workspace @ai-demo-agent/web",
+    "worker": "npm run worker --workspace @ai-demo-agent/web",
     "build:web": "npm run build --workspace @ai-demo-agent/web",
     "lint:web": "npm run lint --workspace @ai-demo-agent/web",
     "check:web": "npm run check --workspace @ai-demo-agent/web",
