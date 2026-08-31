@@ -19,7 +19,7 @@ function readableStatus(status: string | null): string {
 
 export default async function Home() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/");
+  if (!session?.user?.id) redirect("/login?callbackUrl=/");
   const dashboard = await getDashboardData(session.user.id);
 
   return (
@@ -51,7 +51,7 @@ export default async function Home() {
           <header className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 lg:hidden"><Mark /><span className="font-semibold">AI Demo Agent</span></div>
             <div className="hidden lg:block"><p className="text-sm text-zinc-500">Personal workspace</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">Launch dashboard</h1></div>
-            <a href="#new-project" className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.25)] transition hover:bg-violet-400">New project</a>
+            <div className="flex items-center gap-3"><a href="#new-project" className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.25)] transition hover:bg-violet-400">New project</a><AccountMenu name={session.user.name} email={session.user.email} /></div>
           </header>
 
           <section className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -121,3 +121,4 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getDashboardData } from "@/data/projects";
 import { ProjectForm } from "./project-form";
+import { AccountMenu } from "./account-menu";

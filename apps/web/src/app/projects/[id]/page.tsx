@@ -22,7 +22,7 @@ function Status({ value }: { value: string }) {
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
-  if (!session?.user?.id) redirect(`/api/auth/signin?callbackUrl=/projects/${id}`);
+  if (!session?.user?.id) redirect(`/login?callbackUrl=/projects/${id}`);
   const project = await getProjectDetail(session.user.id, id);
   if (!project) notFound();
 

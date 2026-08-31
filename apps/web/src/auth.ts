@@ -9,6 +9,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
   providers: [GitHub],
   session: { strategy: "database" },
+  pages: {
+    signIn: "/login",
+    error: "/auth/error",
+  },
   callbacks: {
     signIn({ account, profile }) {
       return account?.provider === "github" && isWorkspaceOwner(profile?.login);
