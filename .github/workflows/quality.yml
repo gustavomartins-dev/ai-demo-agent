@@ -57,6 +57,9 @@ jobs:
       - name: Run engine tests
         run: npm test
 
+      - name: Run social publishing safety gate
+        run: npm run test:social-safety
+
       - name: Check engine TypeScript
         run: npm run check
 

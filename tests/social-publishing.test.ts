@@ -31,6 +31,22 @@ describe("official social publishing clients", () => {
     await expect(server).rejects.toEqual(expect.any(SocialPublishProviderError));
     await expect(server).rejects.toMatchObject({ code: "http_503", ambiguous: true });
   });
+
+  it("classifies a rate limit as a known provider rejection", async () => {
+    const request = publishSocialPost("X", "hello", "secret", { externalAccountId: "x-1", handle: "@gustavo" }, {
+      fetcher: vi.fn().mockResolvedValue(new Response("rate limited", { status: 429 })),
+    });
+    await expect(request).rejects.toMatchObject({ code: "http_429", ambiguous: false });
+    await expect(request).rejects.not.toThrow(/rate limited|secret/);
+  });
+
+  it("treats an incomplete success as ambiguous to prevent a duplicate retry", async () => {
+    const request = publishSocialPost("LINKEDIN", "hello", "secret", { externalAccountId: "li-1", handle: null }, {
+      linkedInVersion: "202608",
+      fetcher: vi.fn().mockResolvedValue(new Response(null, { status: 201 })),
+    });
+    await expect(request).rejects.toMatchObject({ code: "missing_restli_id", ambiguous: true });
+  });
 });
 
 describe("publishing safety contract", () => {
@@ -42,5 +58,6 @@ describe("publishing safety contract", () => {
     expect(source).toContain("socialContentHash(draft.platform, draft.approvedContent)");
     expect(source.indexOf("transaction.publishAttempt.create")).toBeLessThan(source.indexOf("await callProvider"));
     expect(source).toContain('providerError.ambiguous ? "UNKNOWN" : "FAILED"');
+    expect(source).toContain('if (existing) return { kind: "handled"');
   });
 });

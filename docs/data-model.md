@@ -16,6 +16,8 @@ social publications.
   account metadata returned to the web interface.
 - `SocialOAuthAttempt` — short-lived hashed OAuth state and encrypted X PKCE
   verifier used once during a callback.
+- `PublishAttempt` — one durable, idempotent external request for an exact
+  approved content hash, including sanitized outcome and provider identity.
 
 ## Lifecycle
 

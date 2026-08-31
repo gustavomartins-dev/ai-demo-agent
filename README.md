@@ -38,6 +38,8 @@ Os evals e o runbook de qualidade dos posts estão em
 [docs/social-draft-quality.md](docs/social-draft-quality.md).
 A fundação segura de OAuth para X e LinkedIn está em
 [docs/social-oauth.md](docs/social-oauth.md).
+A aprovação explícita, publicação idempotente e resposta a incidentes estão em
+[docs/social-publishing.md](docs/social-publishing.md).
 
 ## Visão
 
