@@ -10,7 +10,7 @@ const migrationPath = new URL(
 describe("product data model", () => {
   it("models the complete launch pipeline", async () => {
     const schema = await readFile(schemaPath, "utf8");
-    for (const model of ["User", "Project", "GenerationRun", "MediaAsset", "SocialDraft", "SocialAccount"]) {
+    for (const model of ["User", "Project", "GenerationRun", "MediaAsset", "SocialDraft", "SocialAccount", "SocialCredential", "SocialOAuthAttempt"]) {
       expect(schema).toContain(`model ${model}`);
     }
     expect(schema).toContain("@@unique([generationRunId, platform])");

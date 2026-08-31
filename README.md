@@ -36,6 +36,8 @@ O processamento Hermes + Playwright e sua operação estão em
 [docs/generation-worker.md](docs/generation-worker.md).
 Os evals e o runbook de qualidade dos posts estão em
 [docs/social-draft-quality.md](docs/social-draft-quality.md).
+A fundação segura de OAuth para X e LinkedIn está em
+[docs/social-oauth.md](docs/social-oauth.md).
 
 ## Visão
 

@@ -12,6 +12,10 @@ social publications.
   execution report produced by a run.
 - `SocialDraft` — the English-only X or LinkedIn post prepared for review.
 - `SocialAccount` — the public identity and connection state for a platform.
+- `SocialCredential` — encrypted OAuth access/refresh tokens, isolated from
+  account metadata returned to the web interface.
+- `SocialOAuthAttempt` — short-lived hashed OAuth state and encrypted X PKCE
+  verifier used once during a callback.
 
 ## Lifecycle
 
@@ -27,10 +31,12 @@ are separate states, so approving LinkedIn never implicitly approves X.
 
 ## Security boundary
 
-The initial schema intentionally stores no OAuth access token, refresh token, or
-client secret. `SocialAccount` records identity and connection status only.
-Encrypted OAuth credentials will be introduced with the platform connection
-milestone and will never be returned to browser components.
+`SocialAccount` records safe identity, scopes, status, and expiry metadata only.
+`SocialCredential` stores AES-256-GCM encrypted access and refresh tokens in a
+one-to-one record. Client secrets remain environment variables and no account
+read includes credential fields. `SocialOAuthAttempt.stateHash` prevents raw
+OAuth state from being stored; X's PKCE verifier is encrypted until one-time
+callback consumption.
 
 ## Language rule
 

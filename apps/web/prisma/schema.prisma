@@ -76,6 +76,7 @@ model User {
   sessions       Session[]
   projects       Project[]
   socialAccounts SocialAccount[]
+  socialOAuthAttempts SocialOAuthAttempt[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -210,10 +211,40 @@ model SocialAccount {
   externalAccountId String?
   displayName       String?
   handle            String?
+  scopes            String[]            @default([])
+  authorizationExpiresAt DateTime?
   connectedAt       DateTime?
+  credential        SocialCredential?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
   @@unique([userId, platform])
   @@unique([platform, externalAccountId])
+}
+
+model SocialCredential {
+  id                    String        @id @default(cuid())
+  socialAccountId       String        @unique
+  socialAccount         SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  refreshTokenExpiresAt DateTime?
+  encryptionKeyId       String
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+}
+
+model SocialOAuthAttempt {
+  id                    String         @id @default(cuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform              SocialPlatform
+  stateHash             String         @unique
+  encryptedCodeVerifier String?
+  encryptionKeyId       String?
+  expiresAt             DateTime
+  consumedAt            DateTime?
+  createdAt             DateTime       @default(now())
+
+  @@index([userId, platform, expiresAt])
 }
