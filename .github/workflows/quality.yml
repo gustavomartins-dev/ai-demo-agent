@@ -86,5 +86,11 @@ jobs:
       - name: Build web application
         run: npm run build:web
 
+      - name: Verify owner launch journey end to end
+        run: npm run test:e2e
+        env:
+          AUTH_URL: http://127.0.0.1:3100
+          AI_DEMO_OUTPUT_ROOT: /tmp/ai-demo-agent-e2e-output
+
       - name: Audit production dependencies
         run: npm audit --omit=dev
