@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   use: { baseURL: "http://127.0.0.1:3100", trace: "retain-on-failure" },
   webServer: {
-    command: "npm run seed:e2e && npm run dev:web -- --hostname 127.0.0.1 --port 3100",
+    command: "npm run seed:e2e && npm run dev:e2e --workspace @ai-demo-agent/web",
     url: "http://127.0.0.1:3100/login",
     timeout: 120_000,
     reuseExistingServer: false,

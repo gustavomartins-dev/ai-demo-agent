@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:e2e": "next dev --hostname 127.0.0.1 --port 3100",
     "build": "next build",
     "start": "next start",
     "worker": "tsx src/worker/cli.ts",
