@@ -1,4 +1,4 @@
-import { Prisma, type GenerationRun, type Project } from "@prisma/client";
+import { Prisma, type GenerationRun, type MediaAsset, type Project } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { retryDelayMs } from "@/lib/generation-queue-policy";
@@ -7,6 +7,7 @@ const activeStatuses = ["ANALYZING", "PLANNING", "RECORDING", "DRAFTING"] as con
 
 export type ClaimedGenerationRun = GenerationRun & {
   project: Pick<Project, "id" | "name" | "productUrl" | "repositoryUrl" | "isOpenSource">;
+  assets?: Pick<MediaAsset, "type" | "status" | "storageKey">[];
 };
 
 export async function claimGenerationRun(
@@ -43,7 +44,7 @@ export async function claimGenerationRun(
         FROM "GenerationRun"
         WHERE "attemptCount" < "maxAttempts"
           AND (
-            ("status" IN ('QUEUED', 'PLANNED') AND "nextAttemptAt" <= ${now})
+            ("status" IN ('QUEUED', 'PLANNED', 'DRAFTING') AND "nextAttemptAt" <= ${now})
             OR (
               "status" IN ('ANALYZING', 'PLANNING', 'RECORDING', 'DRAFTING')
               AND "leaseExpiresAt" < ${now}
@@ -56,6 +57,7 @@ export async function claimGenerationRun(
       UPDATE "GenerationRun" AS run
       SET "status" = CASE
             WHEN candidate."status" = 'PLANNED' THEN 'RECORDING'::"RunStatus"
+            WHEN candidate."status" = 'DRAFTING' THEN 'DRAFTING'::"RunStatus"
             ELSE 'ANALYZING'::"RunStatus"
           END,
           "workerId" = ${workerId},
@@ -78,6 +80,10 @@ export async function claimGenerationRun(
       include: {
         project: {
           select: { id: true, name: true, productUrl: true, repositoryUrl: true, isOpenSource: true },
+        },
+        assets: {
+          where: { status: "READY", type: { in: ["EXECUTION_REPORT", "EVIDENCE"] } },
+          select: { type: true, status: true, storageKey: true },
         },
       },
     });
@@ -109,7 +115,7 @@ export async function markGenerationRunFailed(
   return db.$transaction(async (transaction) => {
     const run = await transaction.generationRun.findFirst({
       where: { id: runId, workerId },
-      select: { attemptCount: true, maxAttempts: true, plan: true },
+      select: { attemptCount: true, maxAttempts: true, plan: true, status: true },
     });
     if (!run) return "lost-lease";
 
@@ -126,7 +132,7 @@ export async function markGenerationRunFailed(
             lastHeartbeatAt: null,
           }
         : {
-            status: run.plan ? "PLANNED" : "QUEUED",
+            status: run.status === "DRAFTING" ? "DRAFTING" : run.plan ? "PLANNED" : "QUEUED",
             error,
             nextAttemptAt: new Date(now.getTime() + retryDelayMs(run.attemptCount)),
             workerId: null,

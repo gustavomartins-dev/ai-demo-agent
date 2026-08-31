@@ -11,7 +11,7 @@ export type RecordingArtifacts = {
   report: DemoExecutionReport;
 };
 
-function storageKey(filePath: string, outputRoot: string): string {
+export function artifactStorageKey(filePath: string, outputRoot: string): string {
   const relative = path.relative(path.resolve(outputRoot), path.resolve(filePath));
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error("Recording artifact is outside AI_DEMO_OUTPUT_ROOT");
@@ -23,7 +23,7 @@ async function asset(filePath: string, outputRoot: string, type: "VIDEO" | "EXEC
   return {
     type,
     status,
-    storageKey: storageKey(filePath, outputRoot),
+    storageKey: artifactStorageKey(filePath, outputRoot),
     mimeType: type === "VIDEO" ? "video/webm" : type === "EVIDENCE" ? "image/png" : "application/json",
     sizeBytes: BigInt((await stat(filePath)).size),
   };
@@ -62,15 +62,10 @@ export async function registerRecordingArtifacts(
       await transaction.generationRun.update({
         where: { id: runId },
         data: {
-          status: "READY_FOR_REVIEW",
-          completedAt: new Date(),
-          workerId: null,
-          leaseExpiresAt: null,
-          lastHeartbeatAt: null,
+          status: "DRAFTING",
           error: null,
         },
       });
-      await transaction.project.update({ where: { id: owned.projectId }, data: { status: "REVIEW" } });
     }
     return true;
   });

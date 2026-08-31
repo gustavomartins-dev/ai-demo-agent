@@ -3,8 +3,8 @@
 ## Product outcome
 
 The web app queues a `GenerationRun`; a separate worker claims it, asks Hermes
-for a validated plan, records that plan with Playwright, and persists the video,
-execution report, and screenshots for owner review.
+for a validated plan, records that plan with Playwright, and uses the verified
+browser evidence to create separate English drafts for X and LinkedIn.
 
 ```text
 Next.js ──► PostgreSQL queue ──► generation worker
@@ -12,6 +12,8 @@ Next.js ──► PostgreSQL queue ──► generation worker
                          Hermes: validated plan
                                       │
                       Playwright: video + evidence
+                                      │
+                    Hermes: X + LinkedIn drafts
                                       │
                                       ▼
                               READY_FOR_REVIEW
@@ -60,13 +62,15 @@ by the operating system take precedence.
 | `PLANNING` | Hermes is generating the browser plan |
 | `PLANNED` | Validated plan is persisted and waiting for recording |
 | `RECORDING` | Playwright is executing and capturing evidence |
-| `READY_FOR_REVIEW` | Required artifacts are persisted for owner review |
+| `DRAFTING` | Hermes is writing validated X and LinkedIn drafts from browser evidence |
+| `READY_FOR_REVIEW` | Video, evidence, and both drafts are persisted for owner review |
 | `FAILED` | Automatic attempts are exhausted; owner can retry manually |
 
 Planning failures return to `QUEUED`. Recording failures return to `PLANNED`,
-so a valid Hermes plan is not regenerated unnecessarily. Retry delay doubles
-after each failure. A manual retry resets the attempt budget and preserves a
-valid persisted plan when one exists.
+so a valid Hermes plan is not regenerated unnecessarily. Drafting failures
+return to `DRAFTING`, preserving the plan, video, and evidence. Retry delay
+doubles after each failure. A manual retry resets the attempt budget and
+preserves a valid persisted plan when one exists.
 
 ## Configuration
 
@@ -125,6 +129,7 @@ the run. Never edit `workerId` or lease timestamps manually.
 
 ## Current boundary
 
-This milestone stops at `READY_FOR_REVIEW`. It does not create or publish X or
-LinkedIn posts. Social drafts, account OAuth, approval, and publishing remain
-separate milestones so browser generation cannot accidentally publish content.
+The worker creates drafts but never publishes them. Verified mention candidates
+are not connected yet, so generated mention lists remain empty by default.
+Editing, approval, account OAuth, and publishing stay behind later explicit
+owner actions so generation cannot accidentally publish content.

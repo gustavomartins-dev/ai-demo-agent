@@ -51,15 +51,18 @@ const passedArtifacts = {
 };
 
 describe("Playwright generation processor", () => {
-  it("records the persisted plan and registers review-ready artifacts", async () => {
+  it("records the persisted plan, registers artifacts, and starts drafting", async () => {
     const recorder = vi.fn().mockResolvedValue(passedArtifacts);
     const store = vi.fn().mockResolvedValue(true);
-    await createPlaywrightRecordingProcessor(recorder, store, "/output")(
-      recordingRun(),
+    const draft = vi.fn();
+    const run = recordingRun();
+    await createPlaywrightRecordingProcessor(recorder, store, "/output", draft)(
+      run,
       { workerId: "worker-1", signal: new AbortController().signal },
     );
     expect(recorder).toHaveBeenCalledWith(plan.demo, "/output");
     expect(store).toHaveBeenCalledWith("run-1", "worker-1", passedArtifacts, "/output", true);
+    expect(draft).toHaveBeenCalledWith(run, expect.objectContaining({ workerId: "worker-1" }), passedArtifacts);
   });
 
   it("registers failure evidence before propagating the browser error", async () => {

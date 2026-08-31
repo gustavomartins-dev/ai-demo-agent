@@ -187,6 +187,8 @@ model SocialDraft {
   language         String         @default("en")
   content          String
   mentions         Json?
+  claimIds         Json?
+  evidence         Json?
   repositoryUrl    String?
   publishedPostId  String?
   publishedPostUrl String?

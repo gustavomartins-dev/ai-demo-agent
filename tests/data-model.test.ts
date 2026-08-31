@@ -15,6 +15,8 @@ describe("product data model", () => {
     }
     expect(schema).toContain("@@unique([generationRunId, platform])");
     expect(schema).toMatch(/language\s+String\s+@default\("en"\)/);
+    expect(schema).toMatch(/claimIds\s+Json\?/);
+    expect(schema).toMatch(/evidence\s+Json\?/);
   });
 
   it("keeps social publishing credentials out of SocialAccount", async () => {

@@ -17,6 +17,8 @@ describe("generation queue contract", () => {
     expect(source).toContain('"attemptCount" < "maxAttempts"');
     expect(source).toContain('"leaseExpiresAt" <');
     expect(source).toContain("candidate.\"status\" = 'PLANNED'");
+    expect(source).toContain("candidate.\"status\" = 'DRAFTING'");
+    expect(source).toContain("run.status === \"DRAFTING\" ? \"DRAFTING\"");
     expect(source).toContain("'RECORDING'::\"RunStatus\"");
     expect(source).toContain("Worker lease expired after the maximum number of attempts.");
   });
