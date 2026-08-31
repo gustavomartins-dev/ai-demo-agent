@@ -29,7 +29,7 @@ export async function publishApprovedOwnedSocialDraft(
       where: { id: draftId, generationRun: { project: { ownerId } } },
       select: {
         id: true, platform: true, status: true, content: true, approvedContent: true, approvedContentHash: true,
-        publishedPostUrl: true, generationRun: { select: { projectId: true } },
+        publishedPostUrl: true, generationRun: { select: { id: true, projectId: true } },
       },
     });
     if (!draft) return { kind: "blocked" as const };
@@ -74,6 +74,7 @@ export async function publishApprovedOwnedSocialDraft(
       kind: "ready" as const,
       attemptId: attempt.id,
       draftId: draft.id,
+      runId: draft.generationRun.id,
       projectId: draft.generationRun.projectId,
       platform: draft.platform as SocialPlatform,
       content: draft.approvedContent,
@@ -94,10 +95,18 @@ export async function publishApprovedOwnedSocialDraft(
       externalAccountId: prepared.externalAccountId,
       handle: prepared.handle,
     });
-    await db.$transaction([
-      db.publishAttempt.update({ where: { id: prepared.attemptId }, data: { status: "SUCCEEDED", providerPostId: result.providerPostId, providerPostUrl: result.providerPostUrl, completedAt: new Date() } }),
-      db.socialDraft.update({ where: { id: prepared.draftId }, data: { status: "PUBLISHED", publishedPostId: result.providerPostId, publishedPostUrl: result.providerPostUrl, publishedAt: new Date() } }),
-    ]);
+    await db.$transaction(async (transaction) => {
+      await transaction.publishAttempt.update({ where: { id: prepared.attemptId }, data: { status: "SUCCEEDED", providerPostId: result.providerPostId, providerPostUrl: result.providerPostUrl, completedAt: new Date() } });
+      await transaction.socialDraft.update({ where: { id: prepared.draftId }, data: { status: "PUBLISHED", publishedPostId: result.providerPostId, publishedPostUrl: result.providerPostUrl, publishedAt: new Date() } });
+      const [totalDrafts, publishedDrafts] = await Promise.all([
+        transaction.socialDraft.count({ where: { generationRunId: prepared.runId } }),
+        transaction.socialDraft.count({ where: { generationRunId: prepared.runId, status: "PUBLISHED" } }),
+      ]);
+      if (totalDrafts >= 2 && publishedDrafts === totalDrafts) {
+        await transaction.generationRun.update({ where: { id: prepared.runId }, data: { status: "PUBLISHED" } });
+        await transaction.project.update({ where: { id: prepared.projectId }, data: { status: "PUBLISHED" } });
+      }
+    });
     return { status: "published", projectId: prepared.projectId, url: result.providerPostUrl };
   } catch (error) {
     const providerError = error instanceof SocialPublishProviderError ? error : new SocialPublishProviderError("internal_error", true);

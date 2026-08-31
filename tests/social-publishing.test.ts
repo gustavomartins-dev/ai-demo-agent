@@ -59,5 +59,7 @@ describe("publishing safety contract", () => {
     expect(source.indexOf("transaction.publishAttempt.create")).toBeLessThan(source.indexOf("await callProvider"));
     expect(source).toContain('providerError.ambiguous ? "UNKNOWN" : "FAILED"');
     expect(source).toContain('if (existing) return { kind: "handled"');
+    expect(source).toContain("publishedDrafts === totalDrafts");
+    expect(source).toContain('data: { status: "PUBLISHED" }');
   });
 });
