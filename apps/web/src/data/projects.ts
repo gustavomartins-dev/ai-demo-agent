@@ -39,7 +39,7 @@ export type ProjectDetail = {
   }>;
 };
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardData(ownerId: string): Promise<DashboardData> {
   if (!process.env.DATABASE_URL) {
     return {
       databaseConfigured: false,
@@ -50,6 +50,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const [projects, readyForReview, published] = await Promise.all([
     db.project.findMany({
+      where: { ownerId },
       orderBy: { updatedAt: "desc" },
       take: 20,
       select: {
@@ -63,8 +64,8 @@ export async function getDashboardData(): Promise<DashboardData> {
         runs: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
       },
     }),
-    db.generationRun.count({ where: { status: "READY_FOR_REVIEW" } }),
-    db.project.count({ where: { status: "PUBLISHED" } }),
+    db.generationRun.count({ where: { project: { ownerId }, status: "READY_FOR_REVIEW" } }),
+    db.project.count({ where: { ownerId, status: "PUBLISHED" } }),
   ]);
 
   return {
@@ -83,21 +84,11 @@ export async function getDashboardData(): Promise<DashboardData> {
   };
 }
 
-export async function createProject(input: ProjectInput): Promise<{ id: string }> {
-  const email = process.env.APP_OWNER_EMAIL ?? "owner@ai-demo-agent.local";
-  const name = process.env.APP_OWNER_NAME ?? "Workspace owner";
-
-  return db.$transaction(async (transaction) => {
-    const owner = await transaction.user.upsert({
-      where: { email },
-      update: { name },
-      create: { email, name },
-      select: { id: true },
-    });
-
-    return transaction.project.create({
+export async function createProject(ownerId: string, input: ProjectInput): Promise<{ id: string }> {
+  return db.$transaction(async (transaction) =>
+    transaction.project.create({
       data: {
-        ownerId: owner.id,
+        ownerId,
         name: input.name,
         productUrl: input.productUrl,
         repositoryUrl: input.repositoryUrl || null,
@@ -108,15 +99,14 @@ export async function createProject(input: ProjectInput): Promise<{ id: string }
         },
       },
       select: { id: true },
-    });
-  });
+    }),
+  );
 }
 
-export async function getProjectDetail(projectId: string): Promise<ProjectDetail | null> {
+export async function getProjectDetail(ownerId: string, projectId: string): Promise<ProjectDetail | null> {
   if (!process.env.DATABASE_URL) return null;
-  const ownerEmail = process.env.APP_OWNER_EMAIL ?? "owner@ai-demo-agent.local";
   const project = await db.project.findFirst({
-    where: { id: projectId, owner: { email: ownerEmail } },
+    where: { id: projectId, ownerId },
     select: {
       id: true,
       name: true,

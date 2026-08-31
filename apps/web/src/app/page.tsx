@@ -18,7 +18,9 @@ function readableStatus(status: string | null): string {
 }
 
 export default async function Home() {
-  const dashboard = await getDashboardData();
+  const session = await auth();
+  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/");
+  const dashboard = await getDashboardData(session.user.id);
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
@@ -115,5 +117,7 @@ export default async function Home() {
 }
 export const dynamic = "force-dynamic";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getDashboardData } from "@/data/projects";
 import { ProjectForm } from "./project-form";

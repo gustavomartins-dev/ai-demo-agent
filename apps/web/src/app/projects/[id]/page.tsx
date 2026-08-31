@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getProjectDetail } from "@/data/projects";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,9 @@ function Status({ value }: { value: string }) {
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = await getProjectDetail(id);
+  const session = await auth();
+  if (!session?.user?.id) redirect(`/api/auth/signin?callbackUrl=/projects/${id}`);
+  const project = await getProjectDetail(session.user.id, id);
   if (!project) notFound();
 
   return (

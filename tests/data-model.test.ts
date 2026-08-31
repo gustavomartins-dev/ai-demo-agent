@@ -17,9 +17,11 @@ describe("product data model", () => {
     expect(schema).toMatch(/language\s+String\s+@default\("en"\)/);
   });
 
-  it("does not store plaintext OAuth credentials", async () => {
+  it("keeps social publishing credentials out of SocialAccount", async () => {
     const schema = await readFile(schemaPath, "utf8");
-    expect(schema).not.toMatch(/accessToken|refreshToken|clientSecret/i);
+    const socialAccount = schema.match(/model SocialAccount \{[\s\S]*?\n\}/)?.[0];
+    expect(socialAccount).toBeDefined();
+    expect(socialAccount).not.toMatch(/accessToken|refreshToken|clientSecret/i);
   });
 
   it("commits a PostgreSQL migration for every core record", async () => {

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
 import { createProject } from "@/data/projects";
 import { projectInputFromFormData, projectInputSchema } from "@/lib/project-input";
 
@@ -14,10 +15,11 @@ export async function createProjectAction(
   _previousState: CreateProjectState,
   formData: FormData,
 ): Promise<CreateProjectState> {
-  if (process.env.NODE_ENV === "production") {
+  const session = await auth();
+  if (!session?.user?.id) {
     return {
       status: "error",
-      message: "Project creation is disabled until workspace authentication is configured.",
+      message: "Sign in with the workspace owner account before creating a project.",
     };
   }
 
@@ -37,7 +39,7 @@ export async function createProjectAction(
     };
   }
 
-  await createProject(validated.data);
+  await createProject(session.user.id, validated.data);
   revalidatePath("/");
   return { status: "success", message: "Project created and queued for analysis." };
 }
