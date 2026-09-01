@@ -46,6 +46,8 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
       "The journey must start from the application's normal freshly launched main window using its existing local state.",
       "Do not require prepared fixtures, seeded profiles, pending reminders, already-visible notifications, or any setup not included in the returned steps.",
       "Prefer reliably visible main-window navigation and read-only feature exploration over timing-dependent operating-system notifications.",
+      "The demo must contain at least one meaningful, safe click, fill, or press action that changes the visible application state, followed by assertVisible evidence of that result.",
+      "A sequence made only of assertVisible and wait steps is invalid because it does not demonstrate how the product works.",
       "Every important result must be confirmed with an assertVisible step against visible native UI text or an accessibility role/name.",
       "Return only one valid JSON object, with no Markdown or commentary.",
       "The JSON must contain: objective, summary, assumptions, warnings, and demo.",
@@ -93,7 +95,8 @@ export class HermesClient {
   ) {}
 
   async createDemoPlan(request: HermesPlanningRequest): Promise<HermesDemoPlan> {
-    const args = ["--oneshot", buildHermesPlanningPrompt(request)];
+    const parsedRequest = hermesPlanningRequestSchema.parse(request);
+    const args = ["--oneshot", buildHermesPlanningPrompt(parsedRequest)];
     if (this.config.model) args.push("--model", this.config.model);
     if (this.config.provider) args.push("--provider", this.config.provider);
 
@@ -115,7 +118,11 @@ export class HermesClient {
     }
 
     try {
-      return hermesDemoPlanSchema.parse(extractJson(result.stdout));
+      const plan = hermesDemoPlanSchema.parse(extractJson(result.stdout));
+      if (parsedRequest.kind === "DESKTOP" && !plan.demo.steps.some((step) => ["click", "fill", "press"].includes(step.action))) {
+        throw new HermesClientError("Hermes returned a passive desktop plan without a meaningful user interaction");
+      }
+      return plan;
     } catch (error) {
       if (error instanceof HermesClientError) throw error;
       if (error instanceof ZodError) {
