@@ -29,3 +29,12 @@ Desktop projects require:
 - `Launch objective` — the user-visible workflow Hermes must demonstrate.
 
 The Water Reminder acceptance target uses `/home/gustavo-fonseca-martins/lembrete-agua` and its project-local virtual-environment executable. Secrets and environment-variable assignments do not belong in the launch command.
+
+## Worker environment
+
+```dotenv
+AI_DEMO_DESKTOP_PROJECT_ROOTS="/srv/ai-demo-projects"
+AI_DEMO_FFMPEG_PATH="/usr/bin/ffmpeg"
+```
+
+`AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` points to the worker-controlled ffmpeg binary used by cua-driver for MP4 screen recording on Linux and Windows. The worker must run inside the same interactive graphical session as the application; a web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.

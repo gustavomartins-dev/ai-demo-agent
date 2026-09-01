@@ -79,7 +79,7 @@ describe("social drafting worker", () => {
       run,
       { workerId: "worker-1", signal: new AbortController().signal },
       { ...artifacts, report: { ...artifacts.report, status: "failed" as const } },
-    )).rejects.toThrow(/passed Playwright/);
+    )).rejects.toThrow(/passed evidence-backed/);
     expect(generator.createDrafts).not.toHaveBeenCalled();
   });
 });

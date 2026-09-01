@@ -26,7 +26,7 @@ function targetStatement(step: HermesDemoPlan["demo"]["steps"][number]): string 
 
 export function createVerifiedSocialContext(input: VerifiedSocialContextInput): VerifiedSocialContext {
   if (input.report.status !== "passed") {
-    throw new Error("Social context requires a passed Playwright execution report");
+    throw new Error("Social context requires a passed evidence-backed execution report");
   }
 
   const verifiedClaims = input.report.steps.flatMap((result) => {

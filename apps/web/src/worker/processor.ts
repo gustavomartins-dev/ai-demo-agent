@@ -4,6 +4,8 @@ import { HermesClient } from "../../../../src/hermes/client.js";
 import { loadHermesConfig } from "../../../../src/hermes/config.js";
 import { hermesDemoPlanSchema, type HermesDemoPlan, type HermesPlanningRequest } from "../../../../src/hermes/contract.js";
 import { DemoRunError, runDemoWithReport, type DemoRunResult } from "../../../../src/runner.js";
+import { runDesktopDemoWithReport } from "../../../../src/desktop/runner.js";
+import { desktopProjectRoots, resolveDesktopLaunch } from "../../../../src/desktop/launch.js";
 import { createVerifiedSocialContext } from "../../../../src/social/context.js";
 import { HermesSocialClient } from "../../../../src/social/hermes-client.js";
 import type { SocialDraftBundle, VerifiedSocialContext } from "../../../../src/social/contract.js";
@@ -19,6 +21,11 @@ type PlanStore = {
   savePlan(runId: string, workerId: string, plan: HermesDemoPlan): Promise<boolean>;
 };
 type Recorder = (demo: HermesDemoPlan["demo"], outputRoot: string) => Promise<DemoRunResult>;
+type DesktopRecorder = (
+  plan: HermesDemoPlan,
+  desktop: { projectPath: string; launchCommand: string },
+  outputRoot: string,
+) => Promise<DemoRunResult>;
 type ArtifactStore = (
   runId: string,
   workerId: string,
@@ -45,10 +52,29 @@ export function createHermesPlanningProcessor(planner: Planner, store: PlanStore
       throw new Error("Generation run lease was lost before Hermes planning");
     }
 
+    let desktop: { projectPath: string; launchCommand: string } | undefined;
+    let localReadme: string | undefined;
+    if ((run.project.kind ?? "WEB") === "DESKTOP") {
+      if (!run.project.localPath || !run.project.launchCommand) throw new Error("Desktop project launch configuration is incomplete");
+      const launch = await resolveDesktopLaunch(run.project.localPath, run.project.launchCommand, desktopProjectRoots());
+      desktop = { projectPath: launch.projectPath, launchCommand: run.project.launchCommand };
+      try {
+        localReadme = (await readFile(path.join(launch.projectPath, "README.md"), "utf8")).slice(0, 100_000);
+      } catch {
+        // Repository URL and objective remain valid planning context without a README.
+      }
+    }
+
     const request: HermesPlanningRequest = {
+      kind: run.project.kind ?? "WEB",
       url: run.project.productUrl,
       objective: run.objective,
-      ...(run.project.repositoryUrl ? { repository: { url: run.project.repositoryUrl } } : {}),
+      ...(desktop ? { desktop } : {}),
+      ...(run.project.repositoryUrl || desktop ? { repository: {
+        ...(run.project.repositoryUrl ? { url: run.project.repositoryUrl } : {}),
+        ...(desktop ? { path: desktop.projectPath } : {}),
+        ...(localReadme ? { readme: localReadme } : {}),
+      } } : {}),
     };
     const plan = hermesDemoPlanSchema.parse(await planner.createDemoPlan(request));
     ensureActive(context.signal);
@@ -84,6 +110,33 @@ export function createPlaywrightRecordingProcessor(
   };
 }
 
+export function createDesktopRecordingProcessor(
+  recorder: DesktopRecorder,
+  store: ArtifactStore,
+  outputRoot: string,
+  draft?: DraftingProcessor,
+): GenerationProcessor {
+  return async (run, context) => {
+    ensureActive(context.signal);
+    const plan = hermesDemoPlanSchema.parse(run.plan);
+    if (!run.project.localPath || !run.project.launchCommand) throw new Error("Desktop project launch configuration is incomplete");
+    try {
+      const result = await recorder(plan, {
+        projectPath: run.project.localPath,
+        launchCommand: run.project.launchCommand,
+      }, outputRoot);
+      ensureActive(context.signal);
+      if (!(await store(run.id, context.workerId, result, outputRoot, true))) {
+        throw new Error("Generation run lease was lost while registering desktop artifacts");
+      }
+      if (draft) await draft(run, context, result);
+    } catch (error) {
+      if (error instanceof DemoRunError) await store(run.id, context.workerId, error.artifacts, outputRoot, false);
+      throw error;
+    }
+  };
+}
+
 function safeArtifactPath(outputRoot: string, storageKey: string): string {
   const root = path.resolve(outputRoot);
   const resolved = path.resolve(root, storageKey);
@@ -93,7 +146,7 @@ function safeArtifactPath(outputRoot: string, storageKey: string): string {
 
 async function persistedArtifacts(run: ClaimedGenerationRun, outputRoot: string): Promise<RecordingArtifacts> {
   const reportAsset = run.assets?.find((asset) => asset.type === "EXECUTION_REPORT" && asset.status === "READY");
-  if (!reportAsset) throw new Error("A passed Playwright execution report is required before drafting");
+  if (!reportAsset) throw new Error("A passed evidence-backed execution report is required before drafting");
   const reportPath = safeArtifactPath(outputRoot, reportAsset.storageKey);
   const report = JSON.parse(await readFile(reportPath, "utf8")) as RecordingArtifacts["report"];
   const videoPath = null;
@@ -151,10 +204,16 @@ const recordingProcessor = createPlaywrightRecordingProcessor(
   process.env.AI_DEMO_OUTPUT_ROOT ?? "output",
   draftingProcessor,
 );
+const desktopRecordingProcessor = createDesktopRecordingProcessor(
+  (plan, desktop, outputRoot) => runDesktopDemoWithReport(plan, desktop, loadHermesConfig(), outputRoot),
+  registerRecordingArtifacts,
+  process.env.AI_DEMO_OUTPUT_ROOT ?? "output",
+  draftingProcessor,
+);
 
 export const processGenerationRun: GenerationProcessor = (run, context) =>
   run.status === "RECORDING"
-    ? recordingProcessor(run, context)
+    ? (run.project.kind === "DESKTOP" ? desktopRecordingProcessor : recordingProcessor)(run, context)
     : run.status === "DRAFTING"
       ? draftingProcessor(run, context)
       : planningProcessor(run, context);

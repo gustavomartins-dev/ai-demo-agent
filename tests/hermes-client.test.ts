@@ -97,4 +97,17 @@ describe("buildHermesPlanningPrompt", () => {
     expect(prompt).toContain("Do not invent features");
     expect(prompt).toContain("assertVisible");
   });
+
+  it("builds a native accessibility plan for desktop projects", () => {
+    const prompt = buildHermesPlanningPrompt({
+      kind: "DESKTOP",
+      url: "https://github.com/example/product",
+      objective: "Show the native dashboard",
+      desktop: { projectPath: "/srv/product", launchCommand: "./bin/product" },
+    });
+
+    expect(prompt).toContain("native desktop product demo");
+    expect(prompt).toContain("Do not use goto");
+    expect(prompt).toContain("accessibility role/name");
+  });
 });

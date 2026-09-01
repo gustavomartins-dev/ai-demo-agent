@@ -51,6 +51,7 @@ describe("Hermes generation processor", () => {
     await createHermesPlanningProcessor(planner, store)(run(), { workerId: "worker-1", signal: new AbortController().signal });
 
     expect(planner.createDemoPlan).toHaveBeenCalledWith({
+      kind: "WEB",
       url: "https://example.com",
       objective: "Show the homepage",
       repository: { url: "https://github.com/example/product" },

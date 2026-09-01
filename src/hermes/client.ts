@@ -38,6 +38,22 @@ export class HermesClientError extends Error {
 export function buildHermesPlanningPrompt(request: HermesPlanningRequest): string {
   const input = hermesPlanningRequestSchema.parse(request);
 
+  if (input.kind === "DESKTOP") {
+    return [
+      "You are planning a reproducible native desktop product demo.",
+      "Use only documented repository context and the stated launch objective.",
+      "Do not execute the application during planning and do not invent features.",
+      "Every important result must be confirmed with an assertVisible step against visible native UI text or an accessibility role/name.",
+      "Return only one valid JSON object, with no Markdown or commentary.",
+      "The JSON must contain: objective, summary, assumptions, warnings, and demo.",
+      "demo uses the existing semantic actions click, fill, press, wait, and assertVisible. Do not use goto for a desktop demo.",
+      "Targets may use role/name or visible text. Do not use browser CSS or test IDs.",
+      "Keep the journey short, reversible, and free of destructive actions or external communication.",
+      "Planning input:",
+      JSON.stringify(input),
+    ].join("\n");
+  }
+
   return [
     "You are planning a reproducible browser product demo.",
     "Inspect only the authorized URL and use the repository context provided below.",

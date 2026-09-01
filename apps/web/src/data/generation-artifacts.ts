@@ -24,7 +24,7 @@ async function asset(filePath: string, outputRoot: string, type: "VIDEO" | "EXEC
     type,
     status,
     storageKey: artifactStorageKey(filePath, outputRoot),
-    mimeType: type === "VIDEO" ? "video/webm" : type === "EVIDENCE" ? "image/png" : "application/json",
+    mimeType: type === "VIDEO" ? (path.extname(filePath).toLowerCase() === ".mp4" ? "video/mp4" : "video/webm") : type === "EVIDENCE" ? "image/png" : "application/json",
     sizeBytes: BigInt((await stat(filePath)).size),
   };
 }

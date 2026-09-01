@@ -79,7 +79,7 @@ describe("verified social context", () => {
     expect(() => createVerifiedSocialContext({
       ...({ project: context.project, objective: plan.objective, plan, report, evidenceKeysByStep: { 2: "evidence.png" } }),
       report: { ...report, status: "failed" },
-    })).toThrow(/passed Playwright/);
+    })).toThrow(/passed evidence-backed/);
   });
 });
 
