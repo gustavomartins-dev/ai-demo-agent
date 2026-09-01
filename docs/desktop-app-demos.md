@@ -35,6 +35,15 @@ The Water Reminder acceptance target uses `/home/gustavo-fonseca-martins/lembret
 ```dotenv
 AI_DEMO_DESKTOP_PROJECT_ROOTS="/srv/ai-demo-projects"
 AI_DEMO_FFMPEG_PATH="/usr/bin/ffmpeg"
+AI_DEMO_DESKTOP_GDK_BACKEND="x11"
 ```
 
-`AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` points to the worker-controlled ffmpeg binary used by cua-driver for MP4 screen recording on Linux and Windows. The worker must run inside the same interactive graphical session as the application; a web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
+`AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` remains available to Hermes/cua-driver. On Linux, the host runner records the exact X11 window region as H.264 MP4 with GStreamer (`ximagesrc`, `videoconvert`, `x264enc`, and `mp4mux`) so recording does not depend on model-exposed tools.
+
+`AI_DEMO_DESKTOP_GDK_BACKEND=x11` makes GTK applications visible to the bounded Linux Computer Use path. The worker must run inside the same interactive graphical session as the application and requires `xprop`, `xwininfo`, `gst-launch-1.0`, and the listed GStreamer plugins. A web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
+
+## Water Reminder acceptance result
+
+The first native acceptance run produced a passed execution report, a playable MP4, and English X and LinkedIn drafts in `READY_FOR_REVIEW`. The verified journey is intentionally read-only and covers the hydration-plan screen. On the current Ubuntu GTK4 session, AT-SPI can degrade to a window-only tree because another sandboxed application blocks the global accessibility walk; Hermes therefore falls back to a PID/window-bounded visual capture.
+
+Synthetic X11 clicks do not currently activate GTK4 `Gtk.StackSwitcher` tabs reliably in this environment. Multi-page Water Reminder recording remains a follow-up input-delivery improvement; the acceptance run does not claim those unrecorded pages. Publishing remains approval-only.

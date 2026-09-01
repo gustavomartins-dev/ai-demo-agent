@@ -43,10 +43,16 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
       "You are planning a reproducible native desktop product demo.",
       "Use only documented repository context and the stated launch objective.",
       "Do not execute the application during planning and do not invent features.",
+      "The journey must start from the application's normal freshly launched main window using its existing local state.",
+      "Do not require prepared fixtures, seeded profiles, pending reminders, already-visible notifications, or any setup not included in the returned steps.",
+      "Prefer reliably visible main-window navigation and read-only feature exploration over timing-dependent operating-system notifications.",
       "Every important result must be confirmed with an assertVisible step against visible native UI text or an accessibility role/name.",
       "Return only one valid JSON object, with no Markdown or commentary.",
       "The JSON must contain: objective, summary, assumptions, warnings, and demo.",
-      "demo uses the existing semantic actions click, fill, press, wait, and assertVisible. Do not use goto for a desktop demo.",
+      "demo must contain a non-empty name and a steps array.",
+      "Each step must contain one action from click, fill, press, wait, or assertVisible plus only the fields required by that action.",
+      "click and assertVisible require target; fill requires target and value; press requires target and key; wait requires milliseconds between 0 and 10000.",
+      "A target must be an object using role/name or visible text. Do not use goto for a desktop demo.",
       "Targets may use role/name or visible text. Do not use browser CSS or test IDs.",
       "Keep the journey short, reversible, and free of destructive actions or external communication.",
       "Planning input:",
@@ -113,7 +119,11 @@ export class HermesClient {
     } catch (error) {
       if (error instanceof HermesClientError) throw error;
       if (error instanceof ZodError) {
-        throw new HermesClientError("O plano retornado pelo Hermes não segue o contrato esperado", {
+        const detail = error.issues
+          .slice(0, 3)
+          .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+          .join("; ");
+        throw new HermesClientError(`O plano retornado pelo Hermes não segue o contrato esperado: ${detail}`, {
           cause: error
         });
       }

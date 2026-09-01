@@ -149,15 +149,19 @@ async function persistedArtifacts(run: ClaimedGenerationRun, outputRoot: string)
   if (!reportAsset) throw new Error("A passed evidence-backed execution report is required before drafting");
   const reportPath = safeArtifactPath(outputRoot, reportAsset.storageKey);
   const report = JSON.parse(await readFile(reportPath, "utf8")) as RecordingArtifacts["report"];
-  const videoPath = null;
+  const videoAsset = run.assets?.find((asset) => asset.type === "VIDEO" && asset.status === "READY");
+  const videoPath = videoAsset ? safeArtifactPath(outputRoot, videoAsset.storageKey) : null;
   return { reportPath, report, videoPath };
 }
 
 function evidenceKeys(artifacts: RecordingArtifacts, outputRoot: string): Record<number, string> {
   const reportDirectory = path.dirname(artifacts.reportPath);
+  const videoStorageKey = artifacts.videoPath ? artifactStorageKey(artifacts.videoPath, outputRoot) : undefined;
   return Object.fromEntries(artifacts.report.steps.flatMap((step) =>
     step.evidencePath
       ? [[step.index, artifactStorageKey(path.join(reportDirectory, step.evidencePath), outputRoot)]]
+      : step.status === "passed" && videoStorageKey
+        ? [[step.index, videoStorageKey]]
       : [],
   ));
 }

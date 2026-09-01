@@ -45,10 +45,10 @@ export async function claimGenerationRun(
         FROM "GenerationRun"
         WHERE "attemptCount" < "maxAttempts"
           AND (
-            ("status" IN ('QUEUED', 'PLANNED', 'DRAFTING') AND "nextAttemptAt" <= ${now})
+            ("status" IN ('QUEUED', 'PLANNED', 'DRAFTING') AND "nextAttemptAt" <= (${now} AT TIME ZONE 'UTC'))
             OR (
               "status" IN ('ANALYZING', 'PLANNING', 'RECORDING', 'DRAFTING')
-              AND "leaseExpiresAt" < ${now}
+              AND "leaseExpiresAt" < (${now} AT TIME ZONE 'UTC')
             )
           )
         ORDER BY "nextAttemptAt" ASC, "createdAt" ASC
@@ -62,13 +62,13 @@ export async function claimGenerationRun(
             ELSE 'ANALYZING'::"RunStatus"
           END,
           "workerId" = ${workerId},
-          "leaseExpiresAt" = ${leaseExpiresAt},
-          "lastHeartbeatAt" = ${now},
+          "leaseExpiresAt" = (${leaseExpiresAt} AT TIME ZONE 'UTC'),
+          "lastHeartbeatAt" = (${now} AT TIME ZONE 'UTC'),
           "attemptCount" = run."attemptCount" + 1,
-          "startedAt" = COALESCE(run."startedAt", ${now}),
+          "startedAt" = COALESCE(run."startedAt", (${now} AT TIME ZONE 'UTC')),
           "completedAt" = NULL,
           "error" = NULL,
-          "updatedAt" = ${now}
+          "updatedAt" = (${now} AT TIME ZONE 'UTC')
       FROM candidate
       WHERE run."id" = candidate."id"
       RETURNING run."id"
@@ -83,7 +83,7 @@ export async function claimGenerationRun(
           select: { id: true, name: true, kind: true, productUrl: true, repositoryUrl: true, isOpenSource: true, localPath: true, launchCommand: true },
         },
         assets: {
-          where: { status: "READY", type: { in: ["EXECUTION_REPORT", "EVIDENCE"] } },
+          where: { status: "READY", type: { in: ["EXECUTION_REPORT", "EVIDENCE", "VIDEO"] } },
           select: { type: true, status: true, storageKey: true },
         },
       },
