@@ -19,7 +19,7 @@ const bundle = {
   x: {
     platform: "X",
     language: "en",
-    content: "A verified review workflow. https://github.com/example/ai-demo-agent",
+    content: "I built a verified review workflow to keep approval explicit. https://github.com/example/ai-demo-agent",
     claimIds: ["claim-2"],
     mentions: [],
   },
@@ -38,6 +38,8 @@ describe("Hermes social client", () => {
     expect(prompt).toContain("Write both posts in English");
     expect(prompt).toContain("Use only verifiedClaims");
     expect(prompt).toContain("at most 280 characters");
+    expect(prompt).toContain("what I built, why I built it");
+    expect(prompt).toContain("not to sell the product");
   });
 
   it("runs Hermes without a shell and validates its result", async () => {

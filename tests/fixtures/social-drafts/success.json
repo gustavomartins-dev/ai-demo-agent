@@ -2,7 +2,7 @@
   "x": {
     "platform": "X",
     "language": "en",
-    "content": "A verified review workflow, captured with browser evidence. https://github.com/example/ai-demo-agent",
+    "content": "I built a review workflow to make human approval explicit, then verified it with browser evidence. https://github.com/example/ai-demo-agent",
     "claimIds": ["claim-2"],
     "mentions": [{ "identity": "@builder", "reason": "Repository contributor" }]
   },

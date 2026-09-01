@@ -24,7 +24,7 @@ describe("social draft quality evals", () => {
   it("passes a grounded English platform bundle", async () => {
     const result = evaluateSocialDraftBundle(await fixture("success"), context);
     expect(result.passed).toBe(true);
-    expect(result.checks).toHaveLength(5);
+    expect(result.checks).toHaveLength(6);
   });
 
   it("detects content mislabeled as English", async () => {

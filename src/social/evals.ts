@@ -1,7 +1,7 @@
 import { socialDraftBundleSchema, verifiedSocialContextSchema } from "./contract.js";
 
 export type SocialEvalCheck = {
-  name: "schema" | "english_only" | "required_links" | "supported_mentions" | "grounded_claims";
+  name: "schema" | "english_only" | "portfolio_voice" | "required_links" | "supported_mentions" | "grounded_claims";
   passed: boolean;
   detail: string;
 };
@@ -21,6 +21,12 @@ export function appearsEnglish(content: string): boolean {
   const tokens = words(content);
   const signals = tokens.filter((token) => portugueseSignals.has(token)).length;
   return signals < 2;
+}
+
+const salesSignals = /\b(excited to announce|game[- ]changing|revolutionary|try it now|sign up|customers?|transform(?:s|ing)? how you work|market-leading)\b/i;
+
+export function hasPortfolioVoice(content: string): boolean {
+  return /\b(I|I've|I’m|I'm|my)\b/.test(content) && !salesSignals.test(content);
 }
 
 export function evaluateSocialDraftBundle(input: unknown, contextInput: unknown): SocialEvalResult {
@@ -44,6 +50,12 @@ export function evaluateSocialDraftBundle(input: unknown, contextInput: unknown)
     name: "english_only",
     passed: drafts.every((draft) => appearsEnglish(draft.content)),
     detail: "Draft content must not contain multiple deterministic Portuguese-language signals.",
+  });
+
+  checks.push({
+    name: "portfolio_voice",
+    passed: drafts.every((draft) => hasPortfolioVoice(draft.content)),
+    detail: "Drafts must use first-person builder voice and avoid sales or launch-hype language.",
   });
 
   const requiredRepository = context.project.isOpenSource ? context.project.repositoryUrl : null;

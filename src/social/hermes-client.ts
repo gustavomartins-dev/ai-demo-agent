@@ -33,12 +33,15 @@ export class HermesSocialClientError extends Error {
 export function buildSocialDraftPrompt(contextInput: VerifiedSocialContext): string {
   const context = verifiedSocialContextSchema.parse(contextInput);
   return [
-    "Create two evidence-grounded social posts for this completed product demo.",
+    "Create two evidence-grounded portfolio posts about the engineer's completed project demo.",
     "Write both posts in English. Never invent a feature, result, person, handle, or attribution.",
+    "Write in first person as the builder. Briefly explain what I built, why I built it, and one concrete implementation or engineering decision supported by the verified context.",
+    "The purpose is to demonstrate engineering judgment and learning to recruiters and technical peers, not to sell the product or address prospective customers.",
+    "Avoid launch hype, sales language, calls to action, exaggerated claims, and phrases such as game-changing, revolutionary, excited to announce, try it now, or transforms how you work.",
     "Use only verifiedClaims. claimIds must list every claim used by each post.",
     "Suggest mentions only from mentionCandidates, preserving identity and reason exactly. An empty list is valid.",
     "The X post must be concise and at most 280 characters.",
-    "The LinkedIn post should be professional, clear, and at most 3000 characters.",
+    "The LinkedIn post should be professional, technically credible, reflective, and at most 3000 characters.",
     "If the project is open source, include its repositoryUrl verbatim in both posts.",
     "Return only valid JSON with this shape:",
     '{"x":{"platform":"X","language":"en","content":"...","claimIds":["claim-1"],"mentions":[]},"linkedin":{"platform":"LINKEDIN","language":"en","content":"...","claimIds":["claim-1"],"mentions":[]}}',
