@@ -20,6 +20,8 @@ describe("product data model", () => {
     expect(schema).toMatch(/approvedContentHash\s+String\?/);
     expect(schema).toContain('@relation("SocialDraftApprover"');
     expect(schema).toContain("@@unique([socialDraftId, approvalHash])");
+    expect(schema).toContain("enum ProjectKind");
+    expect(schema).toMatch(/kind\s+ProjectKind\s+@default\(WEB\)/);
   });
 
   it("keeps social publishing credentials out of SocialAccount", async () => {

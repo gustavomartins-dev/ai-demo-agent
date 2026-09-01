@@ -6,3 +6,4 @@ test-results/
 *.webm
 *.mp4
 *.log
+.runtime/

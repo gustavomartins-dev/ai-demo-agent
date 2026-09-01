@@ -17,6 +17,11 @@ enum ProjectStatus {
   ARCHIVED
 }
 
+enum ProjectKind {
+  WEB
+  DESKTOP
+}
+
 enum RunStatus {
   QUEUED
   ANALYZING
@@ -133,6 +138,9 @@ model Project {
   name            String
   repositoryUrl   String?
   productUrl      String
+  kind            ProjectKind    @default(WEB)
+  localPath       String?
+  launchCommand   String?
   isOpenSource    Boolean         @default(false)
   contentLanguage String          @default("en")
   status          ProjectStatus   @default(DRAFT)

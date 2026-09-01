@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createProjectAction, type CreateProjectState } from "./actions";
 
 const initialState: CreateProjectState = { status: "idle", message: "" };
@@ -12,6 +12,7 @@ function FieldError({ errors }: { errors?: string[] }) {
 
 export function ProjectForm({ databaseConfigured }: { databaseConfigured: boolean }) {
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
+  const [kind, setKind] = useState<"WEB" | "DESKTOP">("WEB");
   const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-black/25 px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-zinc-700 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-400/10";
 
   return (
@@ -22,10 +23,30 @@ export function ProjectForm({ databaseConfigured }: { databaseConfigured: boolea
         <FieldError errors={state.errors?.name} />
       </label>
       <label className="text-sm text-zinc-300">
-        Product URL
+        Product type
+        <select className={inputClass} name="kind" value={kind} onChange={(event) => setKind(event.target.value as "WEB" | "DESKTOP")}>
+          <option value="WEB">Web app</option>
+          <option value="DESKTOP">Desktop app</option>
+        </select>
+      </label>
+      <label className="text-sm text-zinc-300">
+        Public product URL
         <input className={inputClass} name="productUrl" type="url" placeholder="https://product.example" required />
         <FieldError errors={state.errors?.productUrl} />
       </label>
+      {kind === "DESKTOP" && <>
+        <label className="text-sm text-zinc-300">
+          Local project path
+          <input className={inputClass} name="localPath" placeholder="/home/you/projects/product" required />
+          <FieldError errors={state.errors?.localPath} />
+        </label>
+        <label className="text-sm text-zinc-300">
+          Launch command
+          <input className={inputClass} name="launchCommand" placeholder=".venv/bin/product" required />
+          <FieldError errors={state.errors?.launchCommand} />
+        </label>
+      </>}
+      {kind === "WEB" && <><input type="hidden" name="localPath" value="" /><input type="hidden" name="launchCommand" value="" /></>}
       <label className="text-sm text-zinc-300 md:col-span-2">
         Repository URL <span className="text-zinc-600">(optional)</span>
         <input className={inputClass} name="repositoryUrl" type="url" placeholder="https://github.com/you/project" />

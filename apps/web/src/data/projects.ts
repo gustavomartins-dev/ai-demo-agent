@@ -6,6 +6,7 @@ import type { ProjectInput } from "@/lib/project-input";
 export type ProjectSummary = {
   id: string;
   name: string;
+  kind: string;
   productUrl: string;
   repositoryUrl: string | null;
   isOpenSource: boolean;
@@ -23,6 +24,9 @@ export type DashboardData = {
 export type ProjectDetail = {
   id: string;
   name: string;
+  kind: string;
+  localPath: string | null;
+  launchCommand: string | null;
   productUrl: string;
   repositoryUrl: string | null;
   isOpenSource: boolean;
@@ -72,6 +76,7 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
       select: {
         id: true,
         name: true,
+        kind: true,
         productUrl: true,
         repositoryUrl: true,
         isOpenSource: true,
@@ -90,6 +95,7 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
     projects: projects.map((project) => ({
       id: project.id,
       name: project.name,
+      kind: project.kind,
       productUrl: project.productUrl,
       repositoryUrl: project.repositoryUrl,
       isOpenSource: project.isOpenSource,
@@ -106,7 +112,10 @@ export async function createProject(ownerId: string, input: ProjectInput): Promi
       data: {
         ownerId,
         name: input.name,
+        kind: input.kind,
         productUrl: input.productUrl,
+        localPath: input.kind === "DESKTOP" ? input.localPath : null,
+        launchCommand: input.kind === "DESKTOP" ? input.launchCommand : null,
         repositoryUrl: input.repositoryUrl || null,
         isOpenSource: input.isOpenSource,
         status: "READY",
@@ -126,6 +135,9 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
     select: {
       id: true,
       name: true,
+      kind: true,
+      localPath: true,
+      launchCommand: true,
       productUrl: true,
       repositoryUrl: true,
       isOpenSource: true,

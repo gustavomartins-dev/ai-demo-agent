@@ -6,7 +6,8 @@ import { retryDelayMs } from "@/lib/generation-queue-policy";
 const activeStatuses = ["ANALYZING", "PLANNING", "RECORDING", "DRAFTING"] as const;
 
 export type ClaimedGenerationRun = GenerationRun & {
-  project: Pick<Project, "id" | "name" | "productUrl" | "repositoryUrl" | "isOpenSource">;
+  project: Pick<Project, "id" | "name" | "productUrl" | "repositoryUrl" | "isOpenSource"> &
+    Partial<Pick<Project, "kind" | "localPath" | "launchCommand">>;
   assets?: Pick<MediaAsset, "type" | "status" | "storageKey">[];
 };
 
@@ -79,7 +80,7 @@ export async function claimGenerationRun(
       where: { id: runId, workerId },
       include: {
         project: {
-          select: { id: true, name: true, productUrl: true, repositoryUrl: true, isOpenSource: true },
+          select: { id: true, name: true, kind: true, productUrl: true, repositoryUrl: true, isOpenSource: true, localPath: true, launchCommand: true },
         },
         assets: {
           where: { status: "READY", type: { in: ["EXECUTION_REPORT", "EVIDENCE"] } },
