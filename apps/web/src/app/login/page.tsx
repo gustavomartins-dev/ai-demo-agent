@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/auth";
+import { BrandMark } from "@/app/brand-mark";
 import { safeLocalRedirect } from "@/lib/safe-redirect";
 
 function GitHubMark() {
@@ -25,7 +26,7 @@ export default async function LoginPage({
     <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#09090b] px-5 py-12 text-zinc-100">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(139,92,246,0.2),transparent_38%)]" />
       <section className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#111114]/95 p-7 shadow-2xl shadow-black/40 sm:p-9">
-        <div className="grid size-12 place-items-center rounded-2xl bg-violet-500 font-bold shadow-[0_12px_36px_rgba(139,92,246,0.3)]">AD</div>
+        <BrandMark size={48} />
         <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Private workspace</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">Sign in to AI Demo Agent</h1>
         <p className="mt-3 text-sm leading-6 text-zinc-500">

@@ -5,14 +5,6 @@ const pipelineSteps = [
   { label: "Review", detail: "You approve every publication" },
 ];
 
-function Mark() {
-  return (
-    <div className="grid size-10 place-items-center rounded-xl bg-violet-500 text-sm font-bold text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]">
-      AD
-    </div>
-  );
-}
-
 function readableStatus(status: string | null): string {
   return (status ?? "Not started").toLowerCase().replaceAll("_", " ");
 }
@@ -38,7 +30,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="hidden w-64 shrink-0 border-r border-white/8 px-5 py-6 lg:flex lg:flex-col">
           <div className="flex items-center gap-3 px-2">
-            <Mark />
+            <BrandMark />
             <div>
               <p className="font-semibold tracking-tight">AI Demo Agent</p>
               <p className="text-xs text-zinc-500">Launch workspace</p>
@@ -59,7 +51,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
 
         <main id="dashboard" className="min-w-0 flex-1 px-5 py-6 sm:px-8 lg:px-12 lg:py-10">
           <header className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 lg:hidden"><Mark /><span className="font-semibold">AI Demo Agent</span></div>
+            <div className="flex items-center gap-3 lg:hidden"><BrandMark /><span className="font-semibold">AI Demo Agent</span></div>
             <div className="hidden lg:block"><p className="text-sm text-zinc-500">Personal workspace</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">Launch dashboard</h1></div>
             <div className="flex items-center gap-3"><a href="#new-project" className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.25)] transition hover:bg-violet-400">New project</a><AccountMenu name={session.user.name} email={session.user.email} /></div>
           </header>
@@ -137,4 +129,5 @@ import { getDashboardData } from "@/data/projects";
 import { ProjectForm } from "./project-form";
 import { AccountMenu } from "./account-menu";
 import { SocialConnections } from "./social-connections";
+import { BrandMark } from "./brand-mark";
 import { getSocialAccountConnections } from "@/data/social-accounts";

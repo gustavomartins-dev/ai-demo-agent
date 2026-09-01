@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Demo Agent",
   description: "Turn a working product into a verified demo and approved social launch.",
+  icons: {
+    icon: "/brand-mark.png",
+    apple: "/brand-mark.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
