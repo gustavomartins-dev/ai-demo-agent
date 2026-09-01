@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -28,6 +29,7 @@ type LaunchedApp = { pid: number; stop(): Promise<void> };
 type AppLauncher = (executable: string, args: string[], cwd: string) => Promise<LaunchedApp>;
 type DesktopRecorder = { stop(): Promise<void> };
 type RecorderStarter = (windowId: string, videoPath: string) => Promise<DesktopRecorder>;
+type VideoValidator = (videoPath: string) => Promise<void>;
 
 const defaultHermesRunner: HermesRunner = async (command, args, options) => {
   const ffmpegPath = process.env.AI_DEMO_FFMPEG_PATH;
@@ -40,7 +42,13 @@ const defaultHermesRunner: HermesRunner = async (command, args, options) => {
 
 const defaultAppLauncher: AppLauncher = async (executable, args, cwd) => {
   const environment = process.platform === "linux"
-    ? { ...process.env, GDK_BACKEND: process.env.AI_DEMO_DESKTOP_GDK_BACKEND ?? "x11" }
+    ? {
+        ...process.env,
+        GDK_BACKEND: process.env.AI_DEMO_DESKTOP_GDK_BACKEND ?? "x11",
+        // GTK4's GPU renderer can leave the X11 backing pixmap black even while
+        // the compositor displays the window. Cairo keeps pixels capturable by ximagesrc.
+        GSK_RENDERER: process.env.AI_DEMO_DESKTOP_GSK_RENDERER ?? "cairo",
+      }
     : process.env;
   const child = spawn(executable, args, { cwd, env: environment, stdio: "ignore" });
   await new Promise<void>((resolve, reject) => {
@@ -118,6 +126,38 @@ const startGStreamerRecorder: RecorderStarter = async (windowId, videoPath) => {
   };
 };
 
+export async function validateDesktopVideo(videoPath: string): Promise<void> {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ai-demo-video-check-"));
+  const rawPath = path.join(temporaryDirectory, "frames.rgb");
+  try {
+    await execFileAsync("gst-launch-1.0", [
+      "-q", "filesrc", `location=${videoPath}`, "!", "decodebin", "!", "videoconvert", "!", "videoscale", "!",
+      "video/x-raw,format=RGB,width=64,height=64", "!", "identity", "eos-after=30", "!", "filesink", `location=${rawPath}`,
+    ], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+    const frames = await readFile(rawPath);
+    const frameBytes = 64 * 64 * 3;
+    if (frames.length < frameBytes) throw new Error("Desktop recorder produced no decodable video frames");
+    if (!desktopFramesHaveVisibleContent(frames)) {
+      throw new Error("Desktop recording quality gate rejected a black or visually empty video");
+    }
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+export function desktopFramesHaveVisibleContent(frames: Buffer): boolean {
+  let bestVisibleRatio = 0;
+  const frameBytes = 64 * 64 * 3;
+  for (let offset = 0; offset + frameBytes <= frames.length; offset += frameBytes) {
+    let visiblePixels = 0;
+    for (let pixel = offset; pixel < offset + frameBytes; pixel += 3) {
+      if (Math.max(frames[pixel] ?? 0, frames[pixel + 1] ?? 0, frames[pixel + 2] ?? 0) >= 24) visiblePixels += 1;
+    }
+    bestVisibleRatio = Math.max(bestVisibleRatio, visiblePixels / (64 * 64));
+  }
+  return bestVisibleRatio >= 0.03;
+}
+
 function extractJson(response: string): unknown {
   const trimmed = response.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -154,7 +194,7 @@ export async function runDesktopDemoWithReport(
   desktop: { projectPath: string; launchCommand: string },
   hermes: HermesConfig,
   outputRoot = "output",
-  dependencies: { runHermes?: HermesRunner; launchApp?: AppLauncher; resolveWindowId?: (pid: number) => Promise<string | undefined>; startRecorder?: RecorderStarter; allowedRoots?: string[] } = {},
+  dependencies: { runHermes?: HermesRunner; launchApp?: AppLauncher; resolveWindowId?: (pid: number) => Promise<string | undefined>; startRecorder?: RecorderStarter; validateVideo?: VideoValidator; allowedRoots?: string[] } = {},
 ): Promise<DemoRunResult> {
   const plan = hermesDemoPlanSchema.parse(planInput);
   if (plan.demo.steps.some((step) => step.action === "goto")) throw new Error("Desktop plans cannot contain goto steps");
@@ -218,6 +258,7 @@ export async function runDesktopDemoWithReport(
     try {
       const video = await stat(videoPath);
       if (video.size === 0) throw new Error("Desktop recorder produced an empty video");
+      await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
     } catch (error) {
       executionError = error;
     }
