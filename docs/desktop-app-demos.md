@@ -14,7 +14,8 @@ A launch command is executable code, not ordinary product metadata. The worker m
 - invoke the executable with an argument array and the project as its working directory;
 - bind Hermes Computer Use to the launched process/window;
 - terminate only the process started for that generation run;
-- persist failure evidence and finalize recording during cleanup.
+- persist failure evidence and finalize recording during cleanup;
+- reject a recording that decodes to black or visually empty frames.
 
 The web server stores the configuration but does not launch native applications. Only the separately operated generation worker receives graphical-session access.
 
@@ -36,9 +37,16 @@ The Water Reminder acceptance target uses `/home/gustavo-fonseca-martins/lembret
 AI_DEMO_DESKTOP_PROJECT_ROOTS="/srv/ai-demo-projects"
 AI_DEMO_FFMPEG_PATH="/usr/bin/ffmpeg"
 AI_DEMO_DESKTOP_GDK_BACKEND="x11"
+AI_DEMO_DESKTOP_GSK_RENDERER="cairo"
 ```
 
 `AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` remains available to Hermes/cua-driver. On Linux, the host runner records the exact X11 window region as H.264 MP4 with GStreamer (`ximagesrc`, `videoconvert`, `x264enc`, and `mp4mux`) so recording does not depend on model-exposed tools.
+
+`AI_DEMO_DESKTOP_GSK_RENDERER=cairo` keeps GTK4 pixels readable by `ximagesrc`.
+GTK4's GPU renderer can leave the X11 backing pixmap black while the compositor
+still displays the window, which produced a passing report over an unusable black
+video. The run now decodes the first frames of its own recording and fails unless
+at least one frame carries visible interface content.
 
 `AI_DEMO_DESKTOP_GDK_BACKEND=x11` makes GTK applications visible to the bounded Linux Computer Use path. The worker must run inside the same interactive graphical session as the application and requires `xprop`, `xwininfo`, `gst-launch-1.0`, and the listed GStreamer plugins. A web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
 

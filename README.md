@@ -1,135 +1,87 @@
 # AI Demo Agent
 
-Transforme uma aplicação web funcionando em um vídeo de demonstração sem precisar gravar a tela manualmente.
+Transforme uma aplicação funcionando — web ou desktop — em um vídeo de
+demonstração verificado e em posts prontos para revisão, sem gravar a tela
+manualmente.
 
-> Projeto idealizado e dirigido por Gustavo Martins, desenvolvido com auxílio total de inteligência artificial.
+> Projeto idealizado e dirigido por Gustavo Martins, desenvolvido com auxílio
+> total de inteligência artificial.
+
+A regra que guia o produto: **a IA não inventa funcionalidade**. Cada afirmação
+que chega a um post precisa estar amarrada a algo que foi comprovado na
+interface durante a execução, e nada é publicado sem aprovação explícita.
+
+## O que o agente faz hoje
+
+1. **Recebe o projeto** pelo dashboard privado: URL pública, repositório e o
+   objetivo da demonstração.
+2. **Planeja a narrativa** com o Hermes Agent, que devolve um roteiro em JSON
+   validado antes de qualquer execução.
+3. **Usa o produto de verdade** — Playwright no Chromium para aplicações web,
+   Hermes Computer Use para aplicações desktop nativas.
+4. **Grava e comprova**: vídeo da execução, screenshots das verificações e um
+   relatório estruturado de cada passo.
+5. **Escreve os posts** para X e LinkedIn em inglês, em primeira pessoa, usando
+   apenas afirmações verificadas na execução.
+6. **Espera você**: revisão, edição e aprovação explícita antes de publicar.
 
 ## Estrutura do repositório
 
 ```text
-apps/web/   aplicação Next.js e futuro dashboard de publicação
-src/        motor de planejamento, aprovação e gravação
-tests/      testes do motor e da integração Playwright
+apps/web/   dashboard Next.js, banco de dados e worker de geração
+src/        motor de planejamento, execução, gravação e qualidade dos posts
+tests/      testes do motor, integrações e jornada end-to-end
+docs/       arquitetura, runbooks e limites de segurança
 ```
 
-Para iniciar a aplicação web:
+## Como rodar localmente
+
+Requisitos: Node.js 20 ou superior, Docker (para o PostgreSQL) e o comando
+`hermes` disponível no PATH.
 
 ```bash
 npm install
-npm run dev:web
-```
+npx playwright install chromium
 
-O desenvolvimento local usa PostgreSQL:
-
-```bash
 cp apps/web/.env.example apps/web/.env
 docker compose up -d postgres
 npm run db:migrate
+
+npm run dev:web   # dashboard em http://localhost:3000
+npm run worker    # processa as gerações em outro terminal
 ```
 
-O modelo completo está documentado em [docs/data-model.md](docs/data-model.md).
-A arquitetura e o runbook da aplicação estão em
-[docs/web-foundation.md](docs/web-foundation.md).
-O login privado e a configuração do GitHub OAuth estão em
-[docs/workspace-authentication.md](docs/workspace-authentication.md).
-O processamento Hermes + Playwright e sua operação estão em
-[docs/generation-worker.md](docs/generation-worker.md).
-Os evals e o runbook de qualidade dos posts estão em
-[docs/social-draft-quality.md](docs/social-draft-quality.md).
-A fundação segura de OAuth para X e LinkedIn está em
-[docs/social-oauth.md](docs/social-oauth.md).
-A aprovação explícita, publicação idempotente e resposta a incidentes estão em
-[docs/social-publishing.md](docs/social-publishing.md).
-O mapa de deploy, health checks, backups, métricas e checklist de lançamento
-está em [docs/production-deployment.md](docs/production-deployment.md).
+O acesso ao dashboard é individual: o login usa GitHub OAuth e só a conta
+definida em `APP_OWNER_GITHUB_LOGIN` entra no workspace.
 
-## Visão
+O worker roda separado do servidor web de propósito — ele é o único processo
+que recebe acesso à sessão gráfica e executa aplicações locais.
 
-O AI Demo Agent recebe uma aplicação e cria uma demonstração reproduzível: entende o produto, planeja uma narrativa, utiliza a interface em um navegador real, grava o fluxo e prepara versões para GitHub, LinkedIn e redes sociais.
+## Aplicações web
 
-O projeto nasce com uma regra importante: a IA não deve inventar funcionalidades. Cada afirmação do vídeo precisa ser comprovada durante a execução.
+O caminho web também funciona pela linha de comando, útil para testar um
+roteiro sem subir o dashboard.
 
-## Estado atual — v0.1
-
-O primeiro núcleo já está implementado:
-
-- roteiro declarativo e validado em JSON;
-- automação real do Chromium com Playwright;
-- ações de navegação, clique, preenchimento, teclado e espera;
-- verificações visuais antes da conclusão;
-- gravação automática em WebM;
-- screenshots das verificações e do ponto de falha;
-- relatório estruturado de cada execução;
-- testes do formato de roteiro.
-
-A geração do roteiro por IA, narração e edição automática estão planejadas para as próximas versões.
-
-## Integração planejada com Hermes Agent
-
-O Hermes Agent será responsável por analisar o objetivo e propor um plano. O
-Playwright continuará responsável por executar e gravar o roteiro validado.
-
-O contrato entre os dois está definido pelos schemas
-`hermesPlanningRequestSchema` e `hermesDemoPlanSchema`. A conexão usa o comando
-local `hermes` por padrão e pode ser configurada sem alterar o código:
+Gerar o plano sem gravar:
 
 ```bash
-AI_DEMO_HERMES_COMMAND=hermes
-AI_DEMO_HERMES_MODEL=
-AI_DEMO_HERMES_PROVIDER=
-AI_DEMO_HERMES_TIMEOUT_MS=120000
-```
-
-Modelo e provedor vazios preservam a configuração que já estiver ativa no
-Hermes. O AI Demo Agent validará toda resposta antes de entregá-la ao executor.
-
-Para gerar um plano sem iniciar a gravação:
-
-```bash
-npm run plan -- \
-  --url https://produto.dev \
-  --objective "Mostrar o fluxo principal"
+npm run plan -- --url https://produto.dev --objective "Mostrar o fluxo principal"
 ```
 
 O comando lê o `README.md` do repositório atual quando ele existe e salva um
-`demo-plan.json` validado dentro de `output/`. A gravação não começa nessa etapa.
+`demo-plan.json` validado dentro de `output/`.
 
-Depois de revisar o arquivo, solicite a gravação:
+Depois de revisar o arquivo, pedir a gravação:
 
 ```bash
 npm run record-plan -- output/.../demo-plan.json
 ```
 
-O objetivo, o resumo, os alertas e os passos serão exibidos antes da confirmação.
-Somente uma resposta `s`/`sim` inicia o Playwright. Em uma automação já aprovada,
-`--yes` registra a confirmação explicitamente na chamada do comando.
+Objetivo, resumo, alertas e passos aparecem antes da confirmação. Somente uma
+resposta `s`/`sim` inicia o Playwright; em automação já aprovada, `--yes`
+registra a confirmação explicitamente na chamada.
 
-Ao concluir, a pasta da execução contém:
-
-```text
-demo.webm
-execution-report.json
-evidence/
-```
-
-Esse ciclo foi validado de ponta a ponta com o Hermes Agent v0.20.4: o Hermes
-analisou o site oficial do Playwright e gerou um plano de oito passos; depois da
-aprovação, o Playwright concluiu todos os passos e produziu quatro evidências
-visuais com status final `passed`.
-
-## Como executar
-
-Requisitos: Node.js 20 ou superior.
-
-```bash
-npm install
-npx playwright install chromium
-npm run demo:example
-```
-
-O vídeo será criado dentro de `output/`.
-
-Para gravar outro produto:
+Para executar um roteiro escrito à mão:
 
 ```bash
 npm run demo -- caminho/do/roteiro.demo.json
@@ -137,7 +89,101 @@ npm run demo -- caminho/do/roteiro.demo.json
 
 Use [examples/example.demo.json](examples/example.demo.json) como referência.
 
-## Arquitetura planejada
+## Aplicações desktop
+
+Um projeto desktop guarda a URL pública do produto para a história do
+lançamento e adiciona o caminho local do projeto mais o comando de inicialização
+que o worker executa.
+
+O comando de inicialização é código executável, não metadado. Ele nunca passa
+por shell: o caminho precisa cair dentro da lista de raízes autorizadas
+(`AI_DEMO_DESKTOP_PROJECT_ROOTS`), o executável é resolvido dentro do próprio
+projeto e invocado com uma lista de argumentos.
+
+No Linux a gravação captura a região exata da janela X11 e produz MP4 H.264 via
+GStreamer, sem depender de ferramentas expostas ao modelo. A execução exige
+`xprop`, `xwininfo`, `gst-launch-1.0` e os plugins GStreamer correspondentes. Um
+deploy só-web deixa o caminho desktop desligado simplesmente omitindo a lista de
+raízes.
+
+Duas travas de qualidade nasceram de falhas reais e continuam ativas:
+
+- o plano desktop precisa conter pelo menos uma interação de verdade (clique,
+  preenchimento ou tecla) com evidência visual do resultado — uma sequência só
+  de verificações não demonstra o produto;
+- a gravação é decodificada e reprovada se todos os quadros estiverem preto ou
+  visualmente vazios, o que acontecia com o renderizador GPU do GTK4 mesmo com
+  a janela visível na tela.
+
+Detalhes e limites conhecidos em
+[docs/desktop-app-demos.md](docs/desktop-app-demos.md).
+
+## Qualidade e segurança dos posts
+
+Os rascunhos passam por avaliações determinísticas antes de chegar à revisão:
+formato válido, texto realmente em inglês, voz de portfólio em primeira pessoa
+(sem linguagem de venda ou hype de lançamento), links obrigatórios quando o
+projeto é open source, menções apenas entre as candidatas conhecidas e toda
+afirmação amarrada a um `claimId` verificado.
+
+A publicação exige aprovação explícita, é idempotente e nunca acontece por
+efeito colateral de outra ação.
+
+## Verificação
+
+```bash
+npm run check          # tipos
+npm test               # testes de unidade e integração
+npm run lint:web
+npm run test:e2e       # jornada completa do dono no navegador
+npm run validate:production
+```
+
+A jornada end-to-end prova que o dono autenticado consegue revisar a mídia
+gerada, editar e aprovar um rascunho de X e conferir um resultado já publicado
+no LinkedIn. O harness nunca chama X ou LinkedIn de verdade, então o CI não
+consegue criar post público.
+
+## Documentação
+
+| Assunto | Documento |
+| --- | --- |
+| Modelo de dados | [docs/data-model.md](docs/data-model.md) |
+| Arquitetura e runbook da aplicação web | [docs/web-foundation.md](docs/web-foundation.md) |
+| Login privado e GitHub OAuth | [docs/workspace-authentication.md](docs/workspace-authentication.md) |
+| Worker de geração (Hermes + Playwright) | [docs/generation-worker.md](docs/generation-worker.md) |
+| Demonstrações de aplicações desktop | [docs/desktop-app-demos.md](docs/desktop-app-demos.md) |
+| Qualidade e evals dos posts | [docs/social-draft-quality.md](docs/social-draft-quality.md) |
+| OAuth de X e LinkedIn | [docs/social-oauth.md](docs/social-oauth.md) |
+| Aprovação, publicação e incidentes | [docs/social-publishing.md](docs/social-publishing.md) |
+| Verificação end-to-end | [docs/e2e-verification.md](docs/e2e-verification.md) |
+| Deploy, health checks, backups e métricas | [docs/production-deployment.md](docs/production-deployment.md) |
+
+## Integração com o Hermes Agent
+
+O Hermes analisa o objetivo e propõe o plano; a execução e a gravação ficam com
+o Playwright (web) ou com o Computer Use limitado ao processo lançado (desktop).
+O contrato entre as partes são os schemas `hermesPlanningRequestSchema` e
+`hermesDemoPlanSchema`, e toda resposta é validada antes de virar execução.
+
+```bash
+AI_DEMO_HERMES_COMMAND=hermes
+AI_DEMO_HERMES_MODEL=
+AI_DEMO_HERMES_PROVIDER=
+AI_DEMO_HERMES_TIMEOUT_MS=300000
+```
+
+Modelo e provedor vazios preservam a configuração que já estiver ativa no
+Hermes.
+
+O ciclo web foi validado de ponta a ponta com o Hermes Agent v0.20.4: o Hermes
+analisou o site oficial do Playwright, gerou um plano de oito passos e, depois
+da aprovação, o Playwright concluiu todos eles com quatro evidências visuais e
+status final `passed`. O ciclo desktop foi validado com o Water Reminder, que
+produziu relatório `passed`, MP4 reproduzível e rascunhos de X e LinkedIn em
+`READY_FOR_REVIEW`.
+
+## Arquitetura
 
 ```text
 URL + repositório + objetivo
@@ -149,13 +195,13 @@ URL + repositório + objetivo
  Planejador de narrativa ──► aprovação humana
            │
            ▼
- Executor Playwright ──► evidências + vídeo bruto
+ Executor Playwright / Computer Use ──► evidências + vídeo
            │
            ▼
- Narração + legendas + edição
+ Rascunhos com afirmações verificadas ──► aprovação humana
            │
            ▼
- GitHub / LinkedIn / vídeo vertical
+        X / LinkedIn
 ```
 
 ## Roadmap
@@ -166,20 +212,25 @@ URL + repositório + objetivo
 - [x] Ler README e páginas do produto
 - [x] Gerar roteiro com saída estruturada por IA
 - [x] Mostrar e aprovar o plano antes da gravação
+- [x] Dashboard privado com fila de geração
+- [x] Gravar aplicações desktop nativas
+- [x] Reprovar gravação preta ou sem interação real
+- [x] Avaliar factualidade e voz dos posts
+- [x] Publicar em X e LinkedIn com aprovação explícita
 - [ ] Destacar cursor e aplicar zoom nas ações
 - [ ] Gerar narração e legendas sincronizadas
 - [ ] Exportar MP4 horizontal e vertical
 - [ ] Detectar segredos e dados pessoais na tela
-- [ ] Integrar com GitHub Releases e LinkedIn oficial
-- [ ] Avaliar factualidade, conclusão e qualidade visual
+- [ ] Integrar com GitHub Releases
 
 ## Princípios de segurança
 
-- Executar somente URLs e roteiros autorizados pelo usuário.
+- Executar somente URLs, caminhos e comandos autorizados pelo usuário.
+- Nunca passar comando de inicialização por shell.
 - Bloquear ações destrutivas por padrão.
 - Nunca gravar senhas, tokens ou informações pessoais.
 - Exigir aprovação antes de publicar externamente.
-- Manter um registro das ações realizadas pelo agente.
+- Manter registro das ações realizadas pelo agente.
 - Separar ambiente de demonstração de dados de produção.
 
 ## Métricas do produto
