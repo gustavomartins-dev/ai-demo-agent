@@ -59,7 +59,7 @@ describe("social provider callbacks", () => {
   it("returns sanitized provider failures without response bodies or tokens", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_token", detail: "access_token=leaked" }), { status: 401 }));
     const failure = fetchSocialIdentity("X", "secret-token", fetcher);
-    await expect(failure).rejects.toMatchObject<Partial<SocialProviderError>>({ operation: "identity_lookup", status: 401, providerCode: "invalid_token" });
+    await expect(failure).rejects.toMatchObject({ operation: "identity_lookup", status: 401, providerCode: "invalid_token" } satisfies Partial<SocialProviderError>);
     const secondFailure = fetchSocialIdentity("X", "secret-token", fetcher);
     await expect(secondFailure).rejects.not.toThrow(/leaked|secret-token/);
   });

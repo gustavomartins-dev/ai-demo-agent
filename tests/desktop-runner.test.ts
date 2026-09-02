@@ -2,7 +2,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildDesktopExecutionPrompt, desktopFramesHaveVisibleContent, runDesktopDemoWithReport } from "../src/desktop/runner.js";
+import { buildDesktopExecutionPrompt, concisePlaybackRate, desktopFramesHaveVisibleContent, runDesktopDemoWithReport } from "../src/desktop/runner.js";
 
 const plan = {
   objective: "Show the native dashboard",
@@ -47,11 +47,17 @@ describe("desktop Hermes runner", () => {
       { command: "hermes", timeoutMs: 120_000 }, output, {
         allowedRoots: [root], launchApp, resolveWindowId: async () => "0xe00004", startRecorder, runHermes,
         validateVideo: vi.fn().mockResolvedValue(undefined),
+        composeVideo: async (_sourcePath, outputPath) => writeFile(outputPath, Buffer.alloc(32)),
       });
 
     expect(result.report.status).toBe("passed");
-    expect(result.videoPath).toMatch(/recording\.mp4$/);
+    expect(result.videoPath).toMatch(/presentation\.mp4$/);
     expect(runHermes).toHaveBeenCalledOnce();
+  });
+
+  it("caps long recordings and leaves concise recordings at natural speed", () => {
+    expect(concisePlaybackRate(91.3, 32)).toBeCloseTo(2.853, 3);
+    expect(concisePlaybackRate(24, 32)).toBe(1);
   });
 
   it("rejects black frames and accepts frames with visible interface content", () => {

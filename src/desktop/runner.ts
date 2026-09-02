@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -31,6 +31,7 @@ type AppLauncher = (executable: string, args: string[], cwd: string, environment
 type DesktopRecorder = { stop(): Promise<void> };
 type RecorderStarter = (windowId: string, videoPath: string, environment?: RuntimeEnvironment) => Promise<DesktopRecorder>;
 type VideoValidator = (videoPath: string) => Promise<void>;
+type VideoComposer = (sourcePath: string, outputPath: string) => Promise<void>;
 type VirtualDisplay = { environment: RuntimeEnvironment; stop(): Promise<void> };
 
 const defaultHermesRunner: HermesRunner = async (command, args, options) => {
@@ -223,6 +224,31 @@ export async function validateDesktopVideo(videoPath: string): Promise<void> {
   }
 }
 
+export async function composeConciseDesktopVideo(sourcePath: string, outputPath: string, targetSeconds = 32): Promise<void> {
+  const discovery = await execFileAsync("gst-discoverer-1.0", [sourcePath], { encoding: "utf8" });
+  const duration = discovery.stdout.match(/Duration:\s+(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!duration) throw new Error("Could not determine the desktop recording duration");
+  const seconds = Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+  if (!Number.isFinite(seconds) || seconds <= 0) throw new Error("Desktop recording has an invalid duration");
+  const playbackRate = concisePlaybackRate(seconds, targetSeconds);
+  if (playbackRate === 1) {
+    await copyFile(sourcePath, outputPath);
+    return;
+  }
+  await execFileAsync("gst-launch-1.0", [
+    "-q", "filesrc", `location=${sourcePath}`, "!", "decodebin", "!",
+    "videorate", `rate=${playbackRate.toFixed(4)}`, "!", "videoconvert", "!",
+    "video/x-raw,format=I420", "!", "x264enc", "speed-preset=veryfast", "!",
+    "mp4mux", "!", "filesink", `location=${outputPath}`,
+  ], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+}
+
+export function concisePlaybackRate(sourceSeconds: number, targetSeconds = 32): number {
+  if (!Number.isFinite(sourceSeconds) || sourceSeconds <= 0) throw new Error("Desktop recording has an invalid duration");
+  if (!Number.isFinite(targetSeconds) || targetSeconds <= 0) throw new Error("Desktop presentation target duration must be positive");
+  return Math.max(1, sourceSeconds / targetSeconds);
+}
+
 export function desktopFramesHaveVisibleContent(frames: Buffer): boolean {
   let bestVisibleRatio = 0;
   const frameBytes = 64 * 64 * 3;
@@ -272,7 +298,7 @@ export async function runDesktopDemoWithReport(
   desktop: { projectPath: string; launchCommand: string },
   hermes: HermesConfig,
   outputRoot = "output",
-  dependencies: { runHermes?: HermesRunner; launchApp?: AppLauncher; resolveWindowId?: (pid: number) => Promise<string | undefined>; startRecorder?: RecorderStarter; validateVideo?: VideoValidator; allowedRoots?: string[] } = {},
+  dependencies: { runHermes?: HermesRunner; launchApp?: AppLauncher; resolveWindowId?: (pid: number) => Promise<string | undefined>; startRecorder?: RecorderStarter; validateVideo?: VideoValidator; composeVideo?: VideoComposer; allowedRoots?: string[] } = {},
 ): Promise<DemoRunResult> {
   const plan = hermesDemoPlanSchema.parse(planInput);
   if (plan.demo.steps.some((step) => step.action === "goto")) throw new Error("Desktop plans cannot contain goto steps");
@@ -286,7 +312,8 @@ export async function runDesktopDemoWithReport(
   const outputDir = path.resolve(outputRoot, `${plan.demo.name.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}-${stamp}`);
   await mkdir(outputDir, { recursive: true });
   const reportPath = path.join(outputDir, "execution-report.json");
-  const videoPath = path.join(outputDir, "recording.mp4");
+  const rawVideoPath = path.join(outputDir, "recording-raw.mp4");
+  const videoPath = path.join(outputDir, "presentation.mp4");
   const virtualDisplay = process.platform === "linux" && !dependencies.launchApp ? await startVirtualX11Display() : null;
   const runtimeEnvironment = virtualDisplay?.environment ?? process.env;
   const app = await (dependencies.launchApp ?? defaultAppLauncher)(launch.executable, launch.args, launch.projectPath, runtimeEnvironment);
@@ -304,7 +331,7 @@ export async function runDesktopDemoWithReport(
     if (process.platform === "linux" && !dependencies.launchApp && !windowId) {
       throw new Error(`No X11 window was found for desktop process ${app.pid}`);
     }
-    if (windowId) recorder = await (dependencies.startRecorder ?? startGStreamerRecorder)(windowId, videoPath, runtimeEnvironment);
+    if (windowId) recorder = await (dependencies.startRecorder ?? startGStreamerRecorder)(windowId, rawVideoPath, runtimeEnvironment);
     const args = ["--oneshot", buildDesktopExecutionPrompt(plan, app.pid, outputDir, windowId), "--toolsets", "computer_use", "--in", launch.projectPath];
     if (hermes.model) args.push("--model", hermes.model);
     if (hermes.provider) args.push("--provider", hermes.provider);
@@ -338,8 +365,10 @@ export async function runDesktopDemoWithReport(
 
   if (!executionError) {
     try {
-      const video = await stat(videoPath);
+      const video = await stat(rawVideoPath);
       if (video.size === 0) throw new Error("Desktop recorder produced an empty video");
+      await (dependencies.validateVideo ?? validateDesktopVideo)(rawVideoPath);
+      await (dependencies.composeVideo ?? composeConciseDesktopVideo)(rawVideoPath, videoPath);
       await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
     } catch (error) {
       executionError = error;
