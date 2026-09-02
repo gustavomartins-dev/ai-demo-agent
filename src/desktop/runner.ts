@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -11,6 +12,7 @@ import { buildNarrationScript, loadNarrationConfig, synthesizeNarration } from "
 import { desktopProjectRoots, resolveDesktopLaunch } from "./launch.js";
 
 const execFileAsync = promisify(execFile);
+const ffmpegPath = createRequire(import.meta.url)("ffmpeg-static") as string | null;
 
 const resultSchema = z.object({
   status: z.enum(["passed", "failed"]),
@@ -226,10 +228,7 @@ export async function validateDesktopVideo(videoPath: string): Promise<void> {
 }
 
 export async function composeConciseDesktopVideo(sourcePath: string, outputPath: string, targetSeconds = 32): Promise<void> {
-  const discovery = await execFileAsync("gst-discoverer-1.0", [sourcePath], { encoding: "utf8" });
-  const duration = discovery.stdout.match(/Duration:\s+(\d+):(\d+):(\d+(?:\.\d+)?)/);
-  if (!duration) throw new Error("Could not determine the desktop recording duration");
-  const seconds = Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+  const seconds = await desktopVideoDuration(sourcePath);
   if (!Number.isFinite(seconds) || seconds <= 0) throw new Error("Desktop recording has an invalid duration");
   const playbackRate = concisePlaybackRate(seconds, targetSeconds);
   if (playbackRate === 1) {
@@ -242,6 +241,57 @@ export async function composeConciseDesktopVideo(sourcePath: string, outputPath:
     "video/x-raw,format=I420", "!", "x264enc", "speed-preset=veryfast", "!",
     "mp4mux", "!", "filesink", `location=${outputPath}`,
   ], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+}
+
+export async function desktopVideoDuration(videoPath: string): Promise<number> {
+  const discovery = await execFileAsync("gst-discoverer-1.0", [videoPath], { encoding: "utf8" });
+  const duration = discovery.stdout.match(/Duration:\s+(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!duration) throw new Error("Could not determine the desktop recording duration");
+  return Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+}
+
+export function leadingIdleTrimSeconds(frames: Buffer, framesPerSecond: number, durationSeconds: number): number {
+  const frameBytes = 64 * 64 * 3;
+  if (frames.length < frameBytes * 2) return 0;
+  const first = frames.subarray(0, frameBytes);
+  let firstChange = 0;
+  for (let offset = frameBytes, index = 1; offset + frameBytes <= frames.length; offset += frameBytes, index += 1) {
+    let changedPixels = 0;
+    for (let pixel = 0; pixel < frameBytes; pixel += 3) {
+      const difference = (Math.abs((frames[offset + pixel] ?? 0) - (first[pixel] ?? 0))
+        + Math.abs((frames[offset + pixel + 1] ?? 0) - (first[pixel + 1] ?? 0))
+        + Math.abs((frames[offset + pixel + 2] ?? 0) - (first[pixel + 2] ?? 0))) / 3;
+      if (difference > 12) changedPixels += 1;
+    }
+    if (changedPixels / (64 * 64) >= 0.03) {
+      firstChange = index / framesPerSecond;
+      break;
+    }
+  }
+  return Math.max(0, Math.min(firstChange - 2, durationSeconds - 12));
+}
+
+export async function trimLeadingVisualIdle(videoPath: string): Promise<number> {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ai-demo-idle-trim-"));
+  const framesPath = path.join(temporaryDirectory, "frames.rgb");
+  const trimmedPath = path.join(temporaryDirectory, "trimmed.mp4");
+  try {
+    await execFileAsync("gst-launch-1.0", [
+      "-q", "filesrc", `location=${videoPath}`, "!", "decodebin", "!", "videorate", "!", "videoconvert", "!", "videoscale", "!",
+      "video/x-raw,format=RGB,width=64,height=64,framerate=2/1", "!", "filesink", `location=${framesPath}`,
+    ], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+    const duration = await desktopVideoDuration(videoPath);
+    const trimSeconds = leadingIdleTrimSeconds(await readFile(framesPath), 2, duration);
+    if (trimSeconds <= 0) return 0;
+    await execFileAsync(ffmpegPath ?? "ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y", "-ss", trimSeconds.toFixed(3), "-i", videoPath,
+      "-an", "-c:v", "libx264", "-preset", "veryfast", "-movflags", "+faststart", trimmedPath,
+    ], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+    await copyFile(trimmedPath, videoPath);
+    return trimSeconds;
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 export function concisePlaybackRate(sourceSeconds: number, targetSeconds = 32): number {
@@ -290,24 +340,21 @@ function vttText(value: string): string {
   return value.replaceAll(/\s+/g, " ").replaceAll("-->", "→").trim();
 }
 
-export function buildPresentationCaptions(plan: HermesDemoPlan): string {
-  const assertions = plan.demo.steps
-    .filter((step) => step.action === "assertVisible")
-    .flatMap((step) => step.title ? [vttText(step.title)] : []);
-  const middle = assertions.slice(0, 2).join(" • ") || "Follow the verified workflow and inspect the visible result.";
-  return [
-    "WEBVTT",
-    "",
-    "00:00.000 --> 00:07.000",
-    vttText(plan.objective),
-    "",
-    "00:07.000 --> 00:23.000",
-    vttText(plan.summary),
-    "",
-    "00:23.000 --> 00:33.000",
-    middle,
-    "",
-  ].join("\n");
+export function buildPresentationCaptions(plan: HermesDemoPlan, durationSeconds = 32): string {
+  const words = vttText(buildNarrationScript(plan.objective, plan.summary)).split(" ");
+  const cues: string[] = [];
+  const chunkSize = 10;
+  const cueCount = Math.ceil(words.length / chunkSize);
+  const cueDuration = durationSeconds / cueCount;
+  const timestamp = (seconds: number) => `00:${String(Math.floor(seconds / 60)).padStart(2, "0")}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
+  for (let index = 0; index < cueCount; index += 1) {
+    cues.push(
+      `${timestamp(index * cueDuration)} --> ${timestamp((index + 1) * cueDuration)}`,
+      words.slice(index * chunkSize, (index + 1) * chunkSize).join(" "),
+      "",
+    );
+  }
+  return ["WEBVTT", "", ...cues].join("\n");
 }
 
 export function buildDesktopExecutionPrompt(plan: HermesDemoPlan, pid: number, outputDir: string, windowId?: string): string {
@@ -407,7 +454,9 @@ export async function runDesktopDemoWithReport(
       await (dependencies.validateVideo ?? validateDesktopVideo)(rawVideoPath);
       await (dependencies.composeVideo ?? composeConciseDesktopVideo)(rawVideoPath, videoPath);
       await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
-      await writeFile(captionsPath, buildPresentationCaptions(plan), "utf8");
+      if (!dependencies.composeVideo) await trimLeadingVisualIdle(videoPath);
+      const presentationDuration = dependencies.composeVideo ? 32 : await desktopVideoDuration(videoPath);
+      await writeFile(captionsPath, buildPresentationCaptions(plan, presentationDuration), "utf8");
       const narration = loadNarrationConfig();
       if (narration && !dependencies.composeVideo) {
         await synthesizeNarration(buildNarrationScript(plan.objective, plan.summary), narrationPath, narration);

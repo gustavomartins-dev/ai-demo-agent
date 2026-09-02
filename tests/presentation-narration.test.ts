@@ -13,7 +13,7 @@ describe("presentation narration", () => {
 
   it("frames the project as engineering work rather than a sales pitch", () => {
     const script = buildNarrationScript("solve hydration timing", "the plan and progress workflow");
-    expect(script).toContain("I built this project");
+    expect(script).toContain("the plan and progress workflow");
     expect(script).toContain("implementation working end to end");
     expect(script).not.toMatch(/buy|customer|try it now/i);
   });

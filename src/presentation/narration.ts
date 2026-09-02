@@ -19,12 +19,18 @@ export function loadNarrationConfig(environment: NodeJS.ProcessEnv = process.env
 }
 
 export function buildNarrationScript(objective: string, summary: string): string {
-  return [
-    `I built this project to explore a focused solution: ${objective.trim()}`,
-    `This demo walks through ${summary.trim()}`,
-    "I kept the workflow intentionally narrow so the important interactions and states are easy to understand.",
-    "The result shows the implementation working end to end, with visible evidence instead of unsupported claims.",
-  ].join(" ");
+  const source = summary.trim() || objective.trim();
+  const sentences = source.replaceAll(/\s+/g, " ").match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [source];
+  const selected: string[] = [];
+  let wordCount = 0;
+  for (const sentence of sentences) {
+    const sentenceWords = sentence.trim().split(" ").length;
+    if (selected.length > 0 && wordCount + sentenceWords > 62) break;
+    selected.push(sentence.trim());
+    wordCount += sentenceWords;
+  }
+  if (wordCount < 45) selected.push("This demo shows the implementation working end to end through visible evidence.");
+  return selected.join(" ");
 }
 
 export async function synthesizeNarration(

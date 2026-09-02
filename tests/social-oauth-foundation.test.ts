@@ -74,7 +74,7 @@ describe("social token encryption", () => {
 
   it("keeps encrypted credential columns out of public account reads", async () => {
     const source = await readFile(new URL("../apps/web/src/data/social-accounts.ts", import.meta.url), "utf8");
-    const publicRead = source.match(/export async function getSocialAccountConnections[\s\S]*$/)?.[0];
+    const publicRead = source.match(/export async function getSocialAccountConnections[\s\S]*?(?=\nexport async function|$)/)?.[0];
     expect(publicRead).toBeDefined();
     expect(publicRead).not.toMatch(/encryptedAccessToken|encryptedRefreshToken|credential:/);
   });

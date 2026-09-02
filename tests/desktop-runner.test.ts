@@ -2,7 +2,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildDesktopExecutionPrompt, buildPresentationCaptions, concisePlaybackRate, desktopFramesHaveVisibleContent, runDesktopDemoWithReport } from "../src/desktop/runner.js";
+import { buildDesktopExecutionPrompt, buildPresentationCaptions, concisePlaybackRate, desktopFramesHaveVisibleContent, leadingIdleTrimSeconds, runDesktopDemoWithReport } from "../src/desktop/runner.js";
 
 const plan = {
   objective: "Show the native dashboard",
@@ -59,13 +59,20 @@ describe("desktop Hermes runner", () => {
   it("creates English WebVTT captions from the verified plan", () => {
     const captions = buildPresentationCaptions(plan);
     expect(captions).toContain("WEBVTT");
-    expect(captions).toContain(plan.objective);
     expect(captions).toContain(plan.summary);
+    expect(captions.split("\n").filter((line) => line && !line.includes("-->") && line !== "WEBVTT").every((line) => line.split(" ").length <= 10)).toBe(true);
   });
 
   it("caps long recordings and leaves concise recordings at natural speed", () => {
     expect(concisePlaybackRate(91.3, 32)).toBeCloseTo(2.853, 3);
     expect(concisePlaybackRate(24, 32)).toBe(1);
+  });
+
+  it("removes a long static lead while preserving context and a 12-second floor", () => {
+    const frameBytes = 64 * 64 * 3;
+    const frames = Buffer.alloc(frameBytes * 40);
+    frames.fill(120, frameBytes * 29);
+    expect(leadingIdleTrimSeconds(frames, 2, 33)).toBe(12.5);
   });
 
   it("rejects black frames and accepts frames with visible interface content", () => {
