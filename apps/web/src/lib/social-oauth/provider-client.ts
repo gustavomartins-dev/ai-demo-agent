@@ -91,6 +91,37 @@ export async function exchangeSocialAuthorizationCode(
   };
 }
 
+export async function refreshSocialAccessToken(
+  config: SocialOAuthConfig,
+  refreshToken: string,
+  fetcher: Fetcher = fetch,
+): Promise<SocialTokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (config.clientSecret) {
+    headers.Authorization = `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`;
+  } else {
+    body.set("client_id", config.clientId);
+  }
+  const response = await fetcher(config.tokenEndpoint, {
+    method: "POST",
+    headers,
+    body,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const token = tokenSchema.parse(await providerJson(response, "token_exchange"));
+  return {
+    accessToken: token.access_token,
+    ...(token.refresh_token ? { refreshToken: token.refresh_token } : {}),
+    ...(token.expires_in ? { expiresIn: token.expires_in } : {}),
+    ...(token.refresh_token_expires_in ? { refreshTokenExpiresIn: token.refresh_token_expires_in } : {}),
+    scopes: token.scope?.split(/[ ,]+/).filter(Boolean) ?? config.scopes,
+  };
+}
+
 export async function fetchSocialIdentity(
   platform: SocialOAuthPlatform,
   accessToken: string,

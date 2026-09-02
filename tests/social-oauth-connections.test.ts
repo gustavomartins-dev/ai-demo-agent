@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { effectiveSocialAccountStatus } from "../apps/web/src/lib/social-oauth/account-status.js";
 import { loadSocialOAuthConfig } from "../apps/web/src/lib/social-oauth/config.js";
-import { exchangeSocialAuthorizationCode, fetchSocialIdentity, SocialProviderError } from "../apps/web/src/lib/social-oauth/provider-client.js";
+import { exchangeSocialAuthorizationCode, fetchSocialIdentity, refreshSocialAccessToken, SocialProviderError } from "../apps/web/src/lib/social-oauth/provider-client.js";
 
 describe("social provider callbacks", () => {
   it("exchanges an X code with PKCE and verifies the account identity", async () => {
@@ -34,6 +34,26 @@ describe("social provider callbacks", () => {
       handle: null,
     });
     expect(fetcher).toHaveBeenCalledWith("https://api.linkedin.com/v2/userinfo", expect.objectContaining({ headers: { Authorization: "Bearer secret" } }));
+  });
+
+  it("rotates an expired X access token with the stored refresh token", async () => {
+    const config = loadSocialOAuthConfig("X", {
+      APP_BASE_URL: "https://app.example",
+      X_CLIENT_ID: "x-client",
+      X_CLIENT_SECRET: "x-secret",
+    });
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: "new-access",
+      refresh_token: "new-refresh",
+      expires_in: 7200,
+      scope: "tweet.read tweet.write users.read offline.access",
+    }), { status: 200 }));
+    const token = await refreshSocialAccessToken(config, "old-refresh", fetcher);
+    const request = fetcher.mock.calls[0]?.[1] as RequestInit;
+    expect(String(request.body)).toContain("grant_type=refresh_token");
+    expect(String(request.body)).toContain("refresh_token=old-refresh");
+    expect(request.headers).toMatchObject({ Authorization: expect.stringMatching(/^Basic /) });
+    expect(token).toMatchObject({ accessToken: "new-access", refreshToken: "new-refresh", expiresIn: 7200 });
   });
 
   it("returns sanitized provider failures without response bodies or tokens", async () => {

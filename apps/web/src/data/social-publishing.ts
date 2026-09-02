@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { socialContentHash } from "@/lib/social-approval";
 import { decryptSecret, loadTokenEncryptionConfig } from "@/lib/social-oauth/crypto";
 import { publishSocialPost, SocialPublishProviderError, type PublishResult } from "@/lib/social-publishing/provider";
+import { refreshExpiredSocialAccount } from "@/data/social-accounts";
 
 type Publisher = (
   platform: "X" | "LINKEDIN",
@@ -23,6 +24,12 @@ export async function publishApprovedOwnedSocialDraft(
   draftId: string,
   publisher?: Publisher,
 ): Promise<PublishOutcome> {
+  const ownedDraft = await db.socialDraft.findFirst({
+    where: { id: draftId, generationRun: { project: { ownerId } } },
+    select: { platform: true },
+  });
+  if (!ownedDraft) return { status: "blocked" };
+  await refreshExpiredSocialAccount(ownerId, ownedDraft.platform);
   const encryption = loadTokenEncryptionConfig();
   const prepared = await db.$transaction(async (transaction) => {
     const draft = await transaction.socialDraft.findFirst({

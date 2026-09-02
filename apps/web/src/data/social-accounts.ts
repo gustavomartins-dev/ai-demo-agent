@@ -1,9 +1,11 @@
 import type { SocialPlatform } from "@prisma/client";
 
 import type { SocialOAuthStart } from "@/lib/social-oauth/flow";
-import { decryptSecret, encryptSecret, type TokenEncryptionConfig } from "@/lib/social-oauth/crypto";
+import { decryptSecret, encryptSecret, loadTokenEncryptionConfig, type TokenEncryptionConfig } from "@/lib/social-oauth/crypto";
 import { db } from "@/lib/db";
 import { effectiveSocialAccountStatus } from "@/lib/social-oauth/account-status";
+import { loadSocialOAuthConfig } from "@/lib/social-oauth/config";
+import { refreshSocialAccessToken } from "@/lib/social-oauth/provider-client";
 
 export type ConnectedAccountInput = {
   externalAccountId: string;
@@ -135,6 +137,59 @@ export async function getSocialAccountConnections(userId: string) {
     ...account,
     status: effectiveSocialAccountStatus(account.status, account.authorizationExpiresAt, now),
   }));
+}
+
+export async function refreshExpiredSocialAccount(
+  userId: string,
+  platform: SocialPlatform,
+  now = new Date(),
+): Promise<boolean> {
+  const encryption = loadTokenEncryptionConfig();
+  const account = await db.socialAccount.findFirst({
+    where: { userId, platform, status: "CONNECTED", authorizationExpiresAt: { lte: now } },
+    select: {
+      id: true,
+      scopes: true,
+      credential: {
+        select: { encryptedRefreshToken: true, refreshTokenExpiresAt: true, encryptionKeyId: true },
+      },
+    },
+  });
+  if (!account) return true;
+  if (!account.credential?.encryptedRefreshToken) return false;
+  if (account.credential.refreshTokenExpiresAt && account.credential.refreshTokenExpiresAt <= now) return false;
+  if (account.credential.encryptionKeyId !== encryption.keyId) {
+    throw new Error("Social credential uses an unavailable encryption key");
+  }
+
+  const config = loadSocialOAuthConfig(platform);
+  const currentRefreshToken = decryptSecret(account.credential.encryptedRefreshToken, encryption);
+  const token = await refreshSocialAccessToken(config, currentRefreshToken);
+  const accessTokenExpiresAt = token.expiresIn ? new Date(now.getTime() + token.expiresIn * 1_000) : null;
+  const refreshTokenExpiresAt = token.refreshTokenExpiresIn
+    ? new Date(now.getTime() + token.refreshTokenExpiresIn * 1_000)
+    : account.credential.refreshTokenExpiresAt;
+
+  await db.$transaction([
+    db.socialAccount.update({
+      where: { id: account.id },
+      data: {
+        status: "CONNECTED",
+        scopes: token.scopes.length > 0 ? token.scopes : account.scopes,
+        authorizationExpiresAt: accessTokenExpiresAt,
+      },
+    }),
+    db.socialCredential.update({
+      where: { socialAccountId: account.id },
+      data: {
+        encryptedAccessToken: encryptSecret(token.accessToken, encryption),
+        encryptedRefreshToken: encryptSecret(token.refreshToken ?? currentRefreshToken, encryption),
+        refreshTokenExpiresAt,
+        encryptionKeyId: encryption.keyId,
+      },
+    }),
+  ]);
+  return true;
 }
 
 export async function disconnectOwnedSocialAccount(userId: string, platform: SocialPlatform): Promise<boolean> {
