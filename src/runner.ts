@@ -25,12 +25,14 @@ export type DemoExecutionReport = {
 
 export type DemoRunResult = {
   videoPath: string;
+  captionsPath?: string;
   reportPath: string;
   report: DemoExecutionReport;
 };
 
 export type DemoFailureArtifacts = {
   videoPath: string | null;
+  captionsPath?: string;
   reportPath: string;
   report: DemoExecutionReport;
 };

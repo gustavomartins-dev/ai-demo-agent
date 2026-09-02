@@ -83,9 +83,17 @@ preserves a valid persisted plan when one exists.
 | `AI_DEMO_OUTPUT_ROOT` | `../../output` locally | Persistent directory for video, JSON reports, and screenshots |
 | `AI_DEMO_HERMES_COMMAND` | `hermes` | Local Hermes executable |
 | `AI_DEMO_HERMES_TIMEOUT_MS` | `120000` | Maximum planning command duration |
+| `OPENAI_API_KEY` | unset | Enables English OpenAI text-to-speech narration; captions remain available without it |
+| `AI_DEMO_TTS_MODEL` | `gpt-4o-mini-tts` | OpenAI speech model used for portfolio narration |
+| `AI_DEMO_TTS_VOICE` | `marin` | OpenAI voice used for narration |
 
 `AI_DEMO_HERMES_MODEL` and `AI_DEMO_HERMES_PROVIDER` are optional. Leaving them
 empty reuses the active Hermes configuration.
+
+The Hermes login and `OPENAI_API_KEY` are separate credentials. Hermes plans and
+operates the demo; the OpenAI Audio API creates the optional narration. Every
+desktop presentation also includes an English WebVTT caption track so it remains
+understandable when X or LinkedIn starts playback muted.
 
 ## Logs and diagnosis
 

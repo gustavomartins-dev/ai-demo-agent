@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { HermesConfig } from "../hermes/config.js";
 import { hermesDemoPlanSchema, type HermesDemoPlan } from "../hermes/contract.js";
 import { DemoRunError, type DemoExecutionReport, type DemoRunResult } from "../runner.js";
+import { buildNarrationScript, loadNarrationConfig, synthesizeNarration } from "../presentation/narration.js";
 import { desktopProjectRoots, resolveDesktopLaunch } from "./launch.js";
 
 const execFileAsync = promisify(execFile);
@@ -249,6 +250,16 @@ export function concisePlaybackRate(sourceSeconds: number, targetSeconds = 32): 
   return Math.max(1, sourceSeconds / targetSeconds);
 }
 
+export async function addNarrationToVideo(videoPath: string, narrationPath: string, outputPath: string): Promise<void> {
+  await execFileAsync("gst-launch-1.0", [
+    "-q", "mp4mux", "name=mux", "!", "filesink", `location=${outputPath}`,
+    "filesrc", `location=${videoPath}`, "!", "decodebin", "!", "videoconvert", "!",
+    "video/x-raw,format=I420", "!", "x264enc", "speed-preset=veryfast", "!", "queue", "!", "mux.",
+    "filesrc", `location=${narrationPath}`, "!", "wavparse", "!", "audioconvert", "!", "audioresample", "!",
+    "avenc_aac", "!", "queue", "!", "mux.",
+  ], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+}
+
 export function desktopFramesHaveVisibleContent(frames: Buffer): boolean {
   let bestVisibleRatio = 0;
   const frameBytes = 64 * 64 * 3;
@@ -273,6 +284,30 @@ function safeEvidencePath(outputDir: string, relativePath: string): string {
   const resolved = path.resolve(outputDir, relativePath);
   if (!resolved.startsWith(`${outputDir}${path.sep}`)) throw new Error("Desktop evidence escaped its output directory");
   return resolved;
+}
+
+function vttText(value: string): string {
+  return value.replaceAll(/\s+/g, " ").replaceAll("-->", "→").trim();
+}
+
+export function buildPresentationCaptions(plan: HermesDemoPlan): string {
+  const assertions = plan.demo.steps
+    .filter((step) => step.action === "assertVisible")
+    .flatMap((step) => step.title ? [vttText(step.title)] : []);
+  const middle = assertions.slice(0, 2).join(" • ") || "Follow the verified workflow and inspect the visible result.";
+  return [
+    "WEBVTT",
+    "",
+    "00:00.000 --> 00:07.000",
+    vttText(plan.objective),
+    "",
+    "00:07.000 --> 00:23.000",
+    vttText(plan.summary),
+    "",
+    "00:23.000 --> 00:33.000",
+    middle,
+    "",
+  ].join("\n");
 }
 
 export function buildDesktopExecutionPrompt(plan: HermesDemoPlan, pid: number, outputDir: string, windowId?: string): string {
@@ -314,6 +349,8 @@ export async function runDesktopDemoWithReport(
   const reportPath = path.join(outputDir, "execution-report.json");
   const rawVideoPath = path.join(outputDir, "recording-raw.mp4");
   const videoPath = path.join(outputDir, "presentation.mp4");
+  const captionsPath = path.join(outputDir, "presentation.vtt");
+  const narrationPath = path.join(outputDir, "narration.wav");
   const virtualDisplay = process.platform === "linux" && !dependencies.launchApp ? await startVirtualX11Display() : null;
   const runtimeEnvironment = virtualDisplay?.environment ?? process.env;
   const app = await (dependencies.launchApp ?? defaultAppLauncher)(launch.executable, launch.args, launch.projectPath, runtimeEnvironment);
@@ -370,6 +407,17 @@ export async function runDesktopDemoWithReport(
       await (dependencies.validateVideo ?? validateDesktopVideo)(rawVideoPath);
       await (dependencies.composeVideo ?? composeConciseDesktopVideo)(rawVideoPath, videoPath);
       await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
+      await writeFile(captionsPath, buildPresentationCaptions(plan), "utf8");
+      const narration = loadNarrationConfig();
+      if (narration && !dependencies.composeVideo) {
+        await synthesizeNarration(buildNarrationScript(plan.objective, plan.summary), narrationPath, narration);
+        const narratedVideoPath = path.join(outputDir, "presentation-narrated.mp4");
+        await addNarrationToVideo(videoPath, narrationPath, narratedVideoPath);
+        await rm(videoPath, { force: true });
+        await copyFile(narratedVideoPath, videoPath);
+        await rm(narratedVideoPath, { force: true });
+        await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
+      }
     } catch (error) {
       executionError = error;
     }
@@ -402,5 +450,5 @@ export async function runDesktopDemoWithReport(
   };
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   if (executionError) throw new DemoRunError(report.error ?? "Desktop demo failed", { videoPath: videoAvailable ? videoPath : null, reportPath, report }, { cause: executionError });
-  return { videoPath, reportPath, report };
+  return { videoPath, captionsPath, reportPath, report };
 }

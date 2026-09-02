@@ -2,7 +2,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildDesktopExecutionPrompt, concisePlaybackRate, desktopFramesHaveVisibleContent, runDesktopDemoWithReport } from "../src/desktop/runner.js";
+import { buildDesktopExecutionPrompt, buildPresentationCaptions, concisePlaybackRate, desktopFramesHaveVisibleContent, runDesktopDemoWithReport } from "../src/desktop/runner.js";
 
 const plan = {
   objective: "Show the native dashboard",
@@ -52,7 +52,15 @@ describe("desktop Hermes runner", () => {
 
     expect(result.report.status).toBe("passed");
     expect(result.videoPath).toMatch(/presentation\.mp4$/);
+    expect(result.captionsPath).toMatch(/presentation\.vtt$/);
     expect(runHermes).toHaveBeenCalledOnce();
+  });
+
+  it("creates English WebVTT captions from the verified plan", () => {
+    const captions = buildPresentationCaptions(plan);
+    expect(captions).toContain("WEBVTT");
+    expect(captions).toContain(plan.objective);
+    expect(captions).toContain(plan.summary);
   });
 
   it("caps long recordings and leaves concise recordings at natural speed", () => {
