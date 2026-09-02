@@ -38,6 +38,8 @@ AI_DEMO_DESKTOP_PROJECT_ROOTS="/srv/ai-demo-projects"
 AI_DEMO_FFMPEG_PATH="/usr/bin/ffmpeg"
 AI_DEMO_DESKTOP_GDK_BACKEND="x11"
 AI_DEMO_DESKTOP_GSK_RENDERER="cairo"
+AI_DEMO_XVFB_PATH="Xvfb"
+AI_DEMO_X11_WINDOW_MANAGER_PATH="openbox"
 ```
 
 `AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` remains available to Hermes/cua-driver. On Linux, the host runner records the exact X11 window region as H.264 MP4 with GStreamer (`ximagesrc`, `videoconvert`, `x264enc`, and `mp4mux`) so recording does not depend on model-exposed tools.
@@ -48,10 +50,25 @@ still displays the window, which produced a passing report over an unusable blac
 video. The run now decodes the first frames of its own recording and fails unless
 at least one frame carries visible interface content.
 
-`AI_DEMO_DESKTOP_GDK_BACKEND=x11` makes GTK applications visible to the bounded Linux Computer Use path. The worker must run inside the same interactive graphical session as the application and requires `xprop`, `xwininfo`, `gst-launch-1.0`, and the listed GStreamer plugins. A web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
+On Linux, the runner starts an isolated `Xvfb` display with Openbox, shared by the
+application, Hermes Computer Use, and GStreamer. This makes recording independent
+from the host Wayland session and gives CUA a verifiable focused window for safe
+input delivery. `AI_DEMO_XVFB_PATH` and `AI_DEMO_X11_WINDOW_MANAGER_PATH` can point
+to local executables when the packages are not installed system-wide. A portable
+Openbox bundle can instead be selected with `AI_DEMO_OPENBOX_ROOT`.
+
+`AI_DEMO_DESKTOP_GDK_BACKEND=x11` makes GTK applications visible to the bounded Linux Computer Use path. The worker requires `Xvfb`, `xprop`, `xwininfo`, `gst-launch-1.0`, and the listed GStreamer plugins. A web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
 
 ## Water Reminder acceptance result
 
-The first native acceptance run produced a passed execution report, a playable MP4, and English X and LinkedIn drafts in `READY_FOR_REVIEW`. The verified journey is intentionally read-only and covers the hydration-plan screen. On the current Ubuntu GTK4 session, AT-SPI can degrade to a window-only tree because another sandboxed application blocks the global accessibility walk; Hermes therefore falls back to a PID/window-bounded visual capture.
+The current native acceptance run produced a passed execution report, a visually
+validated 91-second MP4, and English X and LinkedIn drafts in `READY_FOR_REVIEW`.
+The verified journey opens the GTK4 application, navigates from Plano to Dashboard,
+shows recent history and 7/30-day metrics, returns to Plano, and expands the optional
+calculation panel. Openbox supplies verifiable focus inside Xvfb, so CUA can deliver
+bounded input without touching the user's physical desktop.
 
-Synthetic X11 clicks do not currently activate GTK4 `Gtk.StackSwitcher` tabs reliably in this environment. Multi-page Water Reminder recording remains a follow-up input-delivery improvement; the acceptance run does not claim those unrecorded pages. Publishing remains approval-only.
+The social drafts use a first-person engineering portfolio voice: what was built,
+why the practical problem mattered, and which implementation decisions shaped the
+result. Sales language and unsupported claims fail evaluation. Publishing remains
+approval-only.

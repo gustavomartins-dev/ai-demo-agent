@@ -24,32 +24,35 @@ const resultSchema = z.object({
 });
 
 type DesktopAgentResult = z.infer<typeof resultSchema>;
-type HermesRunner = (command: string, args: string[], options: { cwd: string; timeout: number }) => Promise<{ stdout: string; stderr: string }>;
+type RuntimeEnvironment = NodeJS.ProcessEnv;
+type HermesRunner = (command: string, args: string[], options: { cwd: string; timeout: number; env?: RuntimeEnvironment }) => Promise<{ stdout: string; stderr: string }>;
 type LaunchedApp = { pid: number; stop(): Promise<void> };
-type AppLauncher = (executable: string, args: string[], cwd: string) => Promise<LaunchedApp>;
+type AppLauncher = (executable: string, args: string[], cwd: string, environment?: RuntimeEnvironment) => Promise<LaunchedApp>;
 type DesktopRecorder = { stop(): Promise<void> };
-type RecorderStarter = (windowId: string, videoPath: string) => Promise<DesktopRecorder>;
+type RecorderStarter = (windowId: string, videoPath: string, environment?: RuntimeEnvironment) => Promise<DesktopRecorder>;
 type VideoValidator = (videoPath: string) => Promise<void>;
+type VirtualDisplay = { environment: RuntimeEnvironment; stop(): Promise<void> };
 
 const defaultHermesRunner: HermesRunner = async (command, args, options) => {
   const ffmpegPath = process.env.AI_DEMO_FFMPEG_PATH;
+  const baseEnvironment = options.env ?? process.env;
   const environment = ffmpegPath
-    ? { ...process.env, PATH: `${path.dirname(ffmpegPath)}${path.delimiter}${process.env.PATH ?? ""}` }
-    : process.env;
+    ? { ...baseEnvironment, PATH: `${path.dirname(ffmpegPath)}${path.delimiter}${baseEnvironment.PATH ?? ""}` }
+    : baseEnvironment;
   const result = await execFileAsync(command, args, { ...options, env: environment, encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
   return { stdout: result.stdout, stderr: result.stderr };
 };
 
-const defaultAppLauncher: AppLauncher = async (executable, args, cwd) => {
+const defaultAppLauncher: AppLauncher = async (executable, args, cwd, runtimeEnvironment = process.env) => {
   const environment = process.platform === "linux"
     ? {
-        ...process.env,
+        ...runtimeEnvironment,
         GDK_BACKEND: process.env.AI_DEMO_DESKTOP_GDK_BACKEND ?? "x11",
         // GTK4's GPU renderer can leave the X11 backing pixmap black even while
         // the compositor displays the window. Cairo keeps pixels capturable by ximagesrc.
         GSK_RENDERER: process.env.AI_DEMO_DESKTOP_GSK_RENDERER ?? "cairo",
       }
-    : process.env;
+    : runtimeEnvironment;
   const child = spawn(executable, args, { cwd, env: environment, stdio: "ignore" });
   await new Promise<void>((resolve, reject) => {
     child.once("spawn", resolve);
@@ -70,16 +73,29 @@ const defaultAppLauncher: AppLauncher = async (executable, args, cwd) => {
   };
 };
 
-async function resolveX11WindowId(pid: number, timeoutMs = 10_000): Promise<string | undefined> {
+async function resolveX11WindowId(pid: number, timeoutMs = 10_000, environment: RuntimeEnvironment = process.env): Promise<string | undefined> {
   if (process.platform !== "linux") return undefined;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const root = await execFileAsync("xprop", ["-root", "_NET_CLIENT_LIST"], { encoding: "utf8" });
-      const windowIds = root.stdout.match(/0x[0-9a-f]+/gi) ?? [];
+      let windowIds: string[] = [];
+      try {
+        const root = await execFileAsync("xprop", ["-root", "_NET_CLIENT_LIST"], { encoding: "utf8", env: environment });
+        windowIds = root.stdout.match(/0x[0-9a-f]+/gi) ?? [];
+      } catch {
+        // A bare Xvfb display has no EWMH window manager or _NET_CLIENT_LIST.
+      }
+      if (!windowIds.length) {
+        const tree = await execFileAsync("xwininfo", ["-root", "-tree"], { encoding: "utf8", env: environment });
+        windowIds = [...new Set([...tree.stdout.matchAll(/^\s*(0x[0-9a-f]+)\b/gim)].flatMap((match) => match[1] ? [match[1]] : []))];
+      }
       for (const windowId of windowIds) {
-        const property = await execFileAsync("xprop", ["-id", windowId, "_NET_WM_PID"], { encoding: "utf8" });
-        if (property.stdout.match(/=\s*(\d+)/)?.[1] === String(pid)) return windowId;
+        try {
+          const property = await execFileAsync("xprop", ["-id", windowId, "_NET_WM_PID"], { encoding: "utf8", env: environment });
+          if (property.stdout.match(/=\s*(\d+)/)?.[1] === String(pid)) return windowId;
+        } catch {
+          // Root, helper, and synthetic geometry ids do not expose _NET_WM_PID.
+        }
       }
     } catch {
       // The window manager may not have registered the new window yet.
@@ -89,8 +105,8 @@ async function resolveX11WindowId(pid: number, timeoutMs = 10_000): Promise<stri
   return undefined;
 }
 
-const startGStreamerRecorder: RecorderStarter = async (windowId, videoPath) => {
-  const info = await execFileAsync("xwininfo", ["-id", windowId], { encoding: "utf8" });
+const startGStreamerRecorder: RecorderStarter = async (windowId, videoPath, environment = process.env) => {
+  const info = await execFileAsync("xwininfo", ["-id", windowId], { encoding: "utf8", env: environment });
   const read = (label: string) => Number(info.stdout.match(new RegExp(`${label}:\\s*(-?\\d+)`))?.[1]);
   const x = read("Absolute upper-left X");
   const y = read("Absolute upper-left Y");
@@ -108,7 +124,7 @@ const startGStreamerRecorder: RecorderStarter = async (windowId, videoPath) => {
     "!", "x264enc", "speed-preset=ultrafast", "tune=zerolatency",
     "!", "mp4mux",
     "!", "filesink", `location=${videoPath}`,
-  ], { stdio: "ignore" });
+  ], { stdio: "ignore", env: environment });
   await new Promise<void>((resolve, reject) => {
     recorder.once("spawn", resolve);
     recorder.once("error", reject);
@@ -125,6 +141,68 @@ const startGStreamerRecorder: RecorderStarter = async (windowId, videoPath) => {
     },
   };
 };
+
+async function startVirtualX11Display(): Promise<VirtualDisplay> {
+  const executable = process.env.AI_DEMO_XVFB_PATH ?? "Xvfb";
+  const openboxRoot = process.env.AI_DEMO_OPENBOX_ROOT;
+  for (let displayNumber = 90; displayNumber <= 119; displayNumber += 1) {
+    const display = `:${displayNumber}`;
+    const server = spawn(executable, [display, "-screen", "0", "1280x720x24", "-ac", "-nolisten", "tcp"], { stdio: "ignore" });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("spawn", resolve);
+        server.once("error", reject);
+      });
+      const environment: RuntimeEnvironment = { ...process.env, DISPLAY: display };
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        try {
+          await execFileAsync("xprop", ["-root"], { encoding: "utf8", env: environment });
+          const windowManagerEnvironment = openboxRoot ? {
+            ...environment,
+            LD_LIBRARY_PATH: `${path.join(openboxRoot, "usr/lib/x86_64-linux-gnu")}${path.delimiter}${environment.LD_LIBRARY_PATH ?? ""}`,
+            XDG_DATA_DIRS: `${path.join(openboxRoot, "usr/share")}${path.delimiter}${environment.XDG_DATA_DIRS ?? "/usr/local/share:/usr/share"}`,
+          } : environment;
+          const windowManager = spawn(
+            openboxRoot ? path.join(openboxRoot, "usr/bin/openbox") : (process.env.AI_DEMO_X11_WINDOW_MANAGER_PATH ?? "openbox"),
+            [],
+            { env: windowManagerEnvironment, stdio: "ignore" },
+          );
+          await new Promise<void>((resolve, reject) => {
+            windowManager.once("spawn", resolve);
+            windowManager.once("error", reject);
+          });
+          const managerDeadline = Date.now() + 5_000;
+          while (Date.now() < managerDeadline) {
+            try {
+              const manager = await execFileAsync("xprop", ["-root", "_NET_SUPPORTING_WM_CHECK"], { encoding: "utf8", env: environment });
+              if (/window id # 0x[0-9a-f]+/i.test(manager.stdout)) break;
+            } catch {
+              // Openbox is still claiming the virtual display.
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          return {
+            environment: windowManagerEnvironment,
+            async stop() {
+              if (windowManager.exitCode === null && windowManager.signalCode === null) windowManager.kill("SIGTERM");
+              if (server.exitCode === null && server.signalCode === null) server.kill("SIGTERM");
+            },
+          };
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+    } catch (error) {
+      if (server.exitCode === null && server.signalCode === null) server.kill("SIGTERM");
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(`Xvfb is required for reliable desktop recording on Linux. Configure AI_DEMO_XVFB_PATH or install xvfb.`, { cause: error });
+      }
+    }
+    if (server.exitCode === null && server.signalCode === null) server.kill("SIGTERM");
+  }
+  throw new Error("Could not allocate an isolated X11 display for desktop recording");
+}
 
 export async function validateDesktopVideo(videoPath: string): Promise<void> {
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ai-demo-video-check-"));
@@ -209,7 +287,9 @@ export async function runDesktopDemoWithReport(
   await mkdir(outputDir, { recursive: true });
   const reportPath = path.join(outputDir, "execution-report.json");
   const videoPath = path.join(outputDir, "recording.mp4");
-  const app = await (dependencies.launchApp ?? defaultAppLauncher)(launch.executable, launch.args, launch.projectPath);
+  const virtualDisplay = process.platform === "linux" && !dependencies.launchApp ? await startVirtualX11Display() : null;
+  const runtimeEnvironment = virtualDisplay?.environment ?? process.env;
+  const app = await (dependencies.launchApp ?? defaultAppLauncher)(launch.executable, launch.args, launch.projectPath, runtimeEnvironment);
   let recorder: DesktopRecorder | null = null;
   let agentResult: DesktopAgentResult | null = null;
   let executionError: unknown;
@@ -220,17 +300,18 @@ export async function runDesktopDemoWithReport(
       ? await dependencies.resolveWindowId(app.pid)
       : dependencies.launchApp
         ? undefined
-        : await resolveX11WindowId(app.pid);
+        : await resolveX11WindowId(app.pid, 10_000, runtimeEnvironment);
     if (process.platform === "linux" && !dependencies.launchApp && !windowId) {
       throw new Error(`No X11 window was found for desktop process ${app.pid}`);
     }
-    if (windowId) recorder = await (dependencies.startRecorder ?? startGStreamerRecorder)(windowId, videoPath);
+    if (windowId) recorder = await (dependencies.startRecorder ?? startGStreamerRecorder)(windowId, videoPath, runtimeEnvironment);
     const args = ["--oneshot", buildDesktopExecutionPrompt(plan, app.pid, outputDir, windowId), "--toolsets", "computer_use", "--in", launch.projectPath];
     if (hermes.model) args.push("--model", hermes.model);
     if (hermes.provider) args.push("--provider", hermes.provider);
     const result = await (dependencies.runHermes ?? defaultHermesRunner)(hermes.command, args, {
       cwd: launch.projectPath,
       timeout: Math.max(hermes.timeoutMs, 300_000),
+      env: runtimeEnvironment,
     });
     if (!result.stdout.trim()) throw new Error(result.stderr.trim() || "Hermes returned no desktop execution result");
     agentResult = resultSchema.parse(extractJson(result.stdout));
@@ -252,6 +333,7 @@ export async function runDesktopDemoWithReport(
   } finally {
     await recorder?.stop();
     await app.stop();
+    await virtualDisplay?.stop();
   }
 
   if (!executionError) {
