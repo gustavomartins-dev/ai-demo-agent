@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-import { validateProductionEnvironment } from "../apps/web/src/lib/production-config.js";
+import { validateOAuthOrigins, validateProductionEnvironment } from "../apps/web/src/lib/production-config.js";
 
 const valid = {
   NODE_ENV: "production",
@@ -9,6 +9,7 @@ const valid = {
   AUTH_SECRET: "a-production-secret-longer-than-32-characters",
   AUTH_GITHUB_ID: "github-id",
   AUTH_GITHUB_SECRET: "github-secret",
+  AUTH_URL: "https://demo.example",
   APP_OWNER_GITHUB_LOGIN: "owner",
   APP_BASE_URL: "https://demo.example",
   SOCIAL_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
@@ -31,6 +32,15 @@ describe("production readiness", () => {
     expect(() => validateProductionEnvironment({ ...valid, SOCIAL_TOKEN_ENCRYPTION_KEY: Buffer.alloc(16).toString("base64") })).toThrow(/32 bytes/);
     expect(() => validateProductionEnvironment({ ...valid, AI_DEMO_OUTPUT_ROOT: "output" })).toThrow();
     expect(() => validateProductionEnvironment({ ...valid, X_CLIENT_ID: "" })).toThrow();
+    expect(() => validateProductionEnvironment({ ...valid, AUTH_URL: "https://other.example" })).toThrow(/same origin/);
+  });
+
+  it("rejects mixed OAuth origins before a provider round trip", () => {
+    expect(validateOAuthOrigins({ AUTH_URL: "http://127.0.0.1:3000", APP_BASE_URL: "http://127.0.0.1:3000" })).toEqual({
+      authUrl: "http://127.0.0.1:3000",
+      appBaseUrl: "http://127.0.0.1:3000",
+    });
+    expect(() => validateOAuthOrigins({ AUTH_URL: "http://localhost:3000", APP_BASE_URL: "http://127.0.0.1:3000" })).toThrow(/same origin/);
   });
 
   it("provides separate liveness and dependency readiness checks", async () => {
@@ -40,5 +50,6 @@ describe("production readiness", () => {
     expect(ready).toContain("SELECT 1");
     expect(ready).toContain("constants.R_OK | constants.W_OK");
     expect(ready).toContain("status: 503");
+    expect(ready).toContain("validateOAuthOrigins");
   });
 });

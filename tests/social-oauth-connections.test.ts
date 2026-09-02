@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { effectiveSocialAccountStatus } from "../apps/web/src/lib/social-oauth/account-status.js";
 import { loadSocialOAuthConfig } from "../apps/web/src/lib/social-oauth/config.js";
-import { exchangeSocialAuthorizationCode, fetchSocialIdentity } from "../apps/web/src/lib/social-oauth/provider-client.js";
+import { exchangeSocialAuthorizationCode, fetchSocialIdentity, SocialProviderError } from "../apps/web/src/lib/social-oauth/provider-client.js";
 
 describe("social provider callbacks", () => {
   it("exchanges an X code with PKCE and verifies the account identity", async () => {
@@ -37,9 +37,11 @@ describe("social provider callbacks", () => {
   });
 
   it("returns sanitized provider failures without response bodies or tokens", async () => {
-    const fetcher = vi.fn().mockResolvedValue(new Response("access_token=leaked", { status: 401 }));
-    await expect(fetchSocialIdentity("X", "secret-token", fetcher)).rejects.toThrow("provider status 401");
-    await expect(fetchSocialIdentity("X", "secret-token", fetcher)).rejects.not.toThrow(/leaked|secret-token/);
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_token", detail: "access_token=leaked" }), { status: 401 }));
+    const failure = fetchSocialIdentity("X", "secret-token", fetcher);
+    await expect(failure).rejects.toMatchObject<Partial<SocialProviderError>>({ operation: "identity_lookup", status: 401, providerCode: "invalid_token" });
+    const secondFailure = fetchSocialIdentity("X", "secret-token", fetcher);
+    await expect(secondFailure).rejects.not.toThrow(/leaked|secret-token/);
   });
 });
 

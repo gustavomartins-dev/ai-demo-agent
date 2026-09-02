@@ -21,7 +21,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ plat
     const start = createSocialOAuthStart(config);
     await createSocialOAuthAttempt(session.user.id, platform, start, encryption);
     return NextResponse.redirect(start.authorizationUrl);
-  } catch {
-    return NextResponse.redirect(new URL(`/?social=configuration_error&platform=${platform.toLowerCase()}`, request.url));
+  } catch (error) {
+    const reference = crypto.randomUUID().slice(0, 8);
+    console.error(JSON.stringify({ event: "social_oauth.start_failed", reference, platform, error: error instanceof Error ? error.name : "UnknownError" }));
+    return NextResponse.redirect(new URL(`/?social=configuration_error&platform=${platform.toLowerCase()}&reference=${reference}`, request.url));
   }
 }

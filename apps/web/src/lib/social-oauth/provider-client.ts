@@ -3,6 +3,17 @@ import type { SocialOAuthConfig, SocialOAuthPlatform } from "./config.js";
 
 type Fetcher = typeof fetch;
 
+export class SocialProviderError extends Error {
+  constructor(
+    public readonly operation: "token_exchange" | "identity_lookup",
+    public readonly status: number,
+    public readonly providerCode?: string,
+  ) {
+    super(`${operation} failed with provider status ${status}${providerCode ? ` (${providerCode})` : ""}`);
+    this.name = "SocialProviderError";
+  }
+}
+
 const tokenSchema = z.object({
   access_token: z.string().min(1),
   refresh_token: z.string().min(1).optional(),
@@ -30,9 +41,14 @@ export type SocialTokenResponse = {
 
 export type SocialIdentity = { externalAccountId: string; displayName: string; handle: string | null };
 
-async function providerJson(response: Response, operation: string): Promise<unknown> {
-  if (!response.ok) throw new Error(`${operation} failed with provider status ${response.status}`);
-  return response.json();
+async function providerJson(response: Response, operation: SocialProviderError["operation"]): Promise<unknown> {
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok) {
+    const rawCode = payload?.error ?? payload?.code ?? payload?.serviceErrorCode;
+    const providerCode = typeof rawCode === "string" || typeof rawCode === "number" ? String(rawCode).slice(0, 80) : undefined;
+    throw new SocialProviderError(operation, response.status, providerCode);
+  }
+  return payload;
 }
 
 export async function exchangeSocialAuthorizationCode(
@@ -65,7 +81,7 @@ export async function exchangeSocialAuthorizationCode(
     body,
     signal: AbortSignal.timeout(15_000),
   });
-  const token = tokenSchema.parse(await providerJson(response, `${config.platform} token exchange`));
+  const token = tokenSchema.parse(await providerJson(response, "token_exchange"));
   return {
     accessToken: token.access_token,
     ...(token.refresh_token ? { refreshToken: token.refresh_token } : {}),
@@ -85,7 +101,7 @@ export async function fetchSocialIdentity(
     headers: { Authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(15_000),
   });
-  const payload = await providerJson(response, `${platform} identity lookup`);
+  const payload = await providerJson(response, "identity_lookup");
   if (platform === "X") {
     const identity = xIdentitySchema.parse(payload).data;
     return { externalAccountId: identity.id, displayName: identity.name, handle: `@${identity.username}` };

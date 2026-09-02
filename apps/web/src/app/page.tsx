@@ -15,10 +15,12 @@ const socialMessages: Record<string, string> = {
   invalid_state: "This connection link is invalid or expired. Start again.",
   missing_code: "The provider did not return an authorization code.",
   provider_error: "The provider could not complete the connection. Check permissions and try again.",
+  token_exchange_error: "The provider rejected the authorization code or callback settings. Check the registered redirect URL and client credentials.",
+  identity_lookup_error: "Authorization succeeded, but the provider did not allow access to the connected profile. Check the enabled product and scopes.",
   configuration_error: "This provider is not configured on the server yet.",
 };
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ social?: string; platform?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ social?: string; platform?: string; reference?: string }> }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login?callbackUrl=/");
   const dashboard = await getDashboardData(session.user.id);
@@ -70,7 +72,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
             </div>
           )}
 
-          {query.social && socialMessages[query.social] && <div className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${query.social === "connected" ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200" : "border-amber-400/20 bg-amber-400/[0.06] text-amber-100"}`}>{query.platform ? `${query.platform === "linkedin" ? "LinkedIn" : "X"}: ` : ""}{socialMessages[query.social]}</div>}
+          {query.social && socialMessages[query.social] && <div className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${query.social === "connected" ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200" : "border-amber-400/20 bg-amber-400/[0.06] text-amber-100"}`}>{query.platform ? `${query.platform === "linkedin" ? "LinkedIn" : "X"}: ` : ""}{socialMessages[query.social]}{query.reference ? ` Reference: ${query.reference}.` : ""}</div>}
 
           <SocialConnections connections={connections} />
 

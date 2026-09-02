@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const errorCopy: Record<string, string> = {
   AccessDenied: "This GitHub account is not authorized to access the private workspace.",
-  Configuration: "Workspace authentication is not configured correctly. Check the server credentials and try again.",
+  Configuration: "GitHub rejected the OAuth configuration. Confirm that the Client ID, Client Secret, and exact callback URL belong to the same OAuth App, then start a new sign-in.",
 };
 
 export default async function AuthErrorPage({
@@ -21,7 +21,7 @@ export default async function AuthErrorPage({
         <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-rose-300">Access not completed</p>
         <h1 className="mt-3 text-2xl font-semibold">We could not sign you in</h1>
         <p className="mt-3 text-sm leading-6 text-zinc-500">{message}</p>
-        <Link className="mt-7 inline-flex rounded-xl bg-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-white" href="/login">Try GitHub again</Link>
+        <Link className="mt-7 inline-flex rounded-xl bg-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-white" href="/login">Start a new GitHub sign-in</Link>
       </section>
     </main>
   );

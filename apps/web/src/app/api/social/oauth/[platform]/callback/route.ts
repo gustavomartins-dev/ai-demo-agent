@@ -6,15 +6,18 @@ import { loadSocialOAuthConfig, parseSocialOAuthPlatform } from "@/lib/social-oa
 import { loadTokenEncryptionConfig } from "@/lib/social-oauth/crypto";
 import { hashOAuthState } from "@/lib/social-oauth/flow";
 import { exchangeSocialAuthorizationCode, fetchSocialIdentity } from "@/lib/social-oauth/provider-client";
+import { SocialProviderError } from "@/lib/social-oauth/provider-client";
 
-function dashboard(request: Request, result: string, platform: string) {
+function dashboard(request: Request, result: string, platform: string, reference?: string) {
   const url = new URL("/", request.url);
   url.searchParams.set("social", result);
   url.searchParams.set("platform", platform.toLowerCase());
+  if (reference) url.searchParams.set("reference", reference);
   return NextResponse.redirect(url);
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
+  const reference = crypto.randomUUID().slice(0, 8);
   const session = await auth();
   if (!session?.user?.id) return NextResponse.redirect(new URL("/login?callbackUrl=/", request.url));
   const platform = parseSocialOAuthPlatform((await params).platform);
@@ -44,7 +47,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ plat
       refreshTokenExpiresAt: token.refreshTokenExpiresIn ? new Date(now + token.refreshTokenExpiresIn * 1_000) : null,
     }, encryption);
     return dashboard(request, "connected", platform);
-  } catch {
-    return dashboard(request, "provider_error", platform);
+  } catch (error) {
+    const result = error instanceof SocialProviderError ? `${error.operation}_error` : "provider_error";
+    console.error(JSON.stringify({
+      event: "social_oauth.callback_failed",
+      reference,
+      platform,
+      stage: error instanceof SocialProviderError ? error.operation : "callback",
+      status: error instanceof SocialProviderError ? error.status : undefined,
+      providerCode: error instanceof SocialProviderError ? error.providerCode : undefined,
+      error: error instanceof Error ? error.name : "UnknownError",
+    }));
+    return dashboard(request, result, platform, reference);
   }
 }
