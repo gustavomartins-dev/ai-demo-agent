@@ -11,6 +11,9 @@ export type StepExecutionReport = {
   durationMs: number;
   evidencePath?: string;
   error?: string;
+  /** Desktop demos only: this step's window in the raw recording, used to build its concise edit. */
+  startOffsetSec?: number;
+  endOffsetSec?: number;
 };
 
 export type DemoExecutionReport = {

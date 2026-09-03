@@ -15,7 +15,8 @@ A launch command is executable code, not ordinary product metadata. The worker m
 - bind Hermes Computer Use to the launched process/window;
 - terminate only the process started for that generation run;
 - persist failure evidence and finalize recording during cleanup;
-- reject a recording that decodes to black or visually empty frames.
+- reject a recording that decodes to black or visually empty frames;
+- verify every step's evidence itself instead of trusting the model's self-report.
 
 The web server stores the configuration but does not launch native applications. Only the separately operated generation worker receives graphical-session access.
 
@@ -71,10 +72,50 @@ liveness on every attempt; if the process exits first (a crash on launch, a
 missing dependency in the target's virtual environment) the run fails
 immediately with that cause instead of waiting out the full timeout.
 
+## Evidence and pacing
+
+Hermes runs one Computer Use call per demo step instead of one call for the
+whole demo. That trade — more subprocess round trips for a shorter, more
+reliable unit of work per call — buys two things a single batched call could
+not:
+
+- **host-verified evidence.** After each step, the host itself captures a
+  screenshot of the bound window (independent of anything Hermes reports) and
+  rejects the step unless that screenshot decodes to visible content — the
+  same black-frame check the whole recording is held to. A step is only
+  marked passed if Hermes says it succeeded *and* the host's own screenshot
+  backs that up; a plausible-sounding self-report with no visible change
+  behind it fails the step instead of quietly reaching the report.
+- **a real timeline.** The host now knows exactly when each step's call
+  started and finished relative to the raw recording. That per-step timing
+  (`src/desktop/timeline.ts`) drives a segment-by-segment edit instead of one
+  global playback-rate multiplier over the whole clip: dead time between
+  steps is trimmed to a short tail (a static frame sped up still looks
+  static, so cutting it loses nothing), a step that changes the screen
+  (click/fill/press) keeps a real display window since the change can land
+  anywhere inside it, and a step that only confirms something already
+  visible (assertVisible/wait) gets a shorter one. Total output length now
+  follows from how many steps the plan has rather than being squeezed to a
+  fixed target duration, with one uniform correction pass only if a
+  many-step plan still runs past a ~75s ceiling.
+
+Captions follow the same per-step timing, one cue per passed step placed at
+that step's real position in the edited output — not a linear slice of the
+narration summary across the whole runtime. Each cue uses the step's `title`
+from the Hermes plan (both planning prompts now require one) or a generated
+fallback like "Clicking Save" when a step has none. The spoken narration
+track is a separate, whole-demo portfolio summary; captions describe what is
+happening on screen, narration explains why the product exists.
+
+The output canvas is a fixed 1280x720 regardless of the captured window's
+native size (scaled to fit, letterboxed rather than cropped), so a window
+larger or smaller than that doesn't produce an odd aspect ratio in the
+exported file.
+
 ## Water Reminder acceptance result
 
 The current native acceptance run produced a passed execution report, a visually
-validated 91-second MP4, and English X and LinkedIn drafts in `READY_FOR_REVIEW`.
+validated MP4, and English X and LinkedIn drafts in `READY_FOR_REVIEW`.
 The verified journey opens the GTK4 application, navigates from Plano to Dashboard,
 shows recent history and 7/30-day metrics, returns to Plano, and expands the optional
 calculation panel. Openbox supplies verifiable focus inside Xvfb, so CUA can deliver
