@@ -55,6 +55,7 @@ jobs:
         run: npm run validate:production
         env:
           NODE_ENV: production
+          AUTH_URL: https://ci.example.com
           APP_BASE_URL: https://ci.example.com
           SOCIAL_TOKEN_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
           SOCIAL_TOKEN_ENCRYPTION_KEY_ID: ci-v1
