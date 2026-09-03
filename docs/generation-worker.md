@@ -91,9 +91,11 @@ preserves a valid persisted plan when one exists.
 empty reuses the active Hermes configuration.
 
 The Hermes login and `OPENAI_API_KEY` are separate credentials. Hermes plans and
-operates the demo; the OpenAI Audio API creates the optional narration. Every
-desktop presentation also includes an English WebVTT caption track so it remains
-understandable when X or LinkedIn starts playback muted.
+operates the demo; the OpenAI Audio API creates the optional narration, which
+is desktop-only today. Every presentation — web or desktop — includes a
+step-synced English WebVTT caption track and an idle-trimmed H.264 MP4, so a
+web demo remains understandable when X or LinkedIn starts playback muted, and
+its file is one they actually accept.
 
 ## Logs and diagnosis
 

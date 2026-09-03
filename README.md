@@ -64,10 +64,11 @@ from processing the same run and allow recovery after a crash.
 
 ## ✂️ Presentation pipeline
 
-Desktop recordings are composed into concise presentations rather than raw
-screen captures. The pipeline removes idle sections, writes an English caption
-track, and can synthesize a short voice-over using `gpt-4o-mini-tts` when
-`OPENAI_API_KEY` is configured.
+Both web and desktop recordings are composed into concise presentations
+rather than raw screen captures. Real per-step timing drives the edit: dead
+time is trimmed, not just sped up, and an H.264 MP4 with step-synced English
+captions comes out the other end. Desktop demos can additionally synthesize a
+short voice-over using `gpt-4o-mini-tts` when `OPENAI_API_KEY` is configured.
 
 Captions remain available without narration, which matters because social video
 often starts muted.
