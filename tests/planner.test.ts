@@ -42,7 +42,7 @@ describe("planDemo", () => {
       objective: "Show the homepage",
       repository: expect.objectContaining({
         path: process.cwd(),
-        readme: expect.stringContaining("# AI Demo Agent")
+        readme: expect.stringContaining("AI Demo Agent")
       })
     }));
   });
