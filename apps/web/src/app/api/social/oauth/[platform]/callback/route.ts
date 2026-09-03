@@ -9,7 +9,7 @@ import { exchangeSocialAuthorizationCode, fetchSocialIdentity } from "@/lib/soci
 import { SocialProviderError } from "@/lib/social-oauth/provider-client";
 
 function dashboard(request: Request, result: string, platform: string, reference?: string) {
-  const url = new URL("/", request.url);
+  const url = new URL("/", process.env.APP_BASE_URL ?? request.url);
   url.searchParams.set("social", result);
   url.searchParams.set("platform", platform.toLowerCase());
   if (reference) url.searchParams.set("reference", reference);
@@ -19,7 +19,7 @@ function dashboard(request: Request, result: string, platform: string, reference
 export async function GET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
   const reference = crypto.randomUUID().slice(0, 8);
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.redirect(new URL("/login?callbackUrl=/", request.url));
+  if (!session?.user?.id) return NextResponse.redirect(new URL("/login?callbackUrl=/", process.env.APP_BASE_URL ?? request.url));
   const platform = parseSocialOAuthPlatform((await params).platform);
   if (!platform) return new Response("Unsupported social platform", { status: 404 });
   const query = new URL(request.url).searchParams;

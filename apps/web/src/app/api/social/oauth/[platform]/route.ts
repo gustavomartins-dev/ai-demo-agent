@@ -9,7 +9,7 @@ import { createSocialOAuthStart } from "@/lib/social-oauth/flow";
 export async function GET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {
-    const login = new URL("/login", request.url);
+    const login = new URL("/login", process.env.APP_BASE_URL ?? request.url);
     login.searchParams.set("callbackUrl", new URL(request.url).pathname);
     return NextResponse.redirect(login);
   }
@@ -24,6 +24,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ plat
   } catch (error) {
     const reference = crypto.randomUUID().slice(0, 8);
     console.error(JSON.stringify({ event: "social_oauth.start_failed", reference, platform, error: error instanceof Error ? error.name : "UnknownError" }));
-    return NextResponse.redirect(new URL(`/?social=configuration_error&platform=${platform.toLowerCase()}&reference=${reference}`, request.url));
+    return NextResponse.redirect(new URL(`/?social=configuration_error&platform=${platform.toLowerCase()}&reference=${reference}`, process.env.APP_BASE_URL ?? request.url));
   }
 }
