@@ -1,7 +1,10 @@
 import { chromium, type Locator, type Page } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Demo, DemoStep, DemoTarget } from "./schema.js";
+import { buildPresentationCaptions } from "./presentation/captions.js";
+import { buildEditTimeline, type StepTiming } from "./presentation/timeline.js";
+import { composeEditedVideo, ffmpegVideoDurationSeconds } from "./presentation/video.js";
 
 export type StepExecutionReport = {
   index: number;
@@ -11,7 +14,7 @@ export type StepExecutionReport = {
   durationMs: number;
   evidencePath?: string;
   error?: string;
-  /** Desktop demos only: this step's window in the raw recording, used to build its concise edit. */
+  /** This step's window in the raw recording, used to build its concise, step-synced edit. */
   startOffsetSec?: number;
   endOffsetSec?: number;
 };
@@ -68,6 +71,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const INTERACTIVE_ACTIONS: DemoStep["action"][] = ["goto", "click", "fill", "press"];
+
 export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Promise<DemoRunResult> {
   const startedAt = new Date();
   const stamp = startedAt.toISOString().replaceAll(":", "-");
@@ -81,13 +86,15 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
     recordVideo: { dir: outputDir, size: demo.viewport }
   });
   const page = await context.newPage();
+  const recordingStartedAtMs = Date.now();
   const video = page.video();
-  const steps: StepExecutionReport[] = [];
+  const stepReports: StepExecutionReport[] = [];
+  const stepTimings: StepTiming[] = [];
   let executionError: unknown;
 
   for (const [index, step] of demo.steps.entries()) {
     console.log(`[${index + 1}/${demo.steps.length}] ${step.title ?? step.action}`);
-    const stepStartedAt = Date.now();
+    const stepStartedAtMs = Date.now();
 
     try {
       await executeStep(page, step);
@@ -96,13 +103,22 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
         evidencePath = path.join("evidence", `step-${index + 1}-assert-visible.png`);
         await page.screenshot({ path: path.join(outputDir, evidencePath), fullPage: true });
       }
-      steps.push({
+      const stepFinishedAtMs = Date.now();
+      stepTimings.push({
+        index: index + 1,
+        interactive: INTERACTIVE_ACTIONS.includes(step.action),
+        startOffsetSec: Math.max(0, (stepStartedAtMs - recordingStartedAtMs) / 1000),
+        endOffsetSec: Math.max(0, (stepFinishedAtMs - recordingStartedAtMs) / 1000),
+      });
+      stepReports.push({
         index: index + 1,
         action: step.action,
         ...(step.title ? { title: step.title } : {}),
         status: "passed",
-        durationMs: Date.now() - stepStartedAt,
-        ...(evidencePath ? { evidencePath } : {})
+        durationMs: stepFinishedAtMs - stepStartedAtMs,
+        ...(evidencePath ? { evidencePath } : {}),
+        startOffsetSec: stepTimings.at(-1)!.startOffsetSec,
+        endOffsetSec: stepTimings.at(-1)!.endOffsetSec,
       });
     } catch (error) {
       executionError = error;
@@ -114,14 +130,23 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
       } catch {
         // The report still records the original browser failure.
       }
-      steps.push({
+      const stepFinishedAtMs = Date.now();
+      stepTimings.push({
+        index: index + 1,
+        interactive: INTERACTIVE_ACTIONS.includes(step.action),
+        startOffsetSec: Math.max(0, (stepStartedAtMs - recordingStartedAtMs) / 1000),
+        endOffsetSec: Math.max(0, (stepFinishedAtMs - recordingStartedAtMs) / 1000),
+      });
+      stepReports.push({
         index: index + 1,
         action: step.action,
         ...(step.title ? { title: step.title } : {}),
         status: "failed",
-        durationMs: Date.now() - stepStartedAt,
+        durationMs: stepFinishedAtMs - stepStartedAtMs,
         ...(screenshotSaved ? { evidencePath } : {}),
-        error: errorMessage(error)
+        error: errorMessage(error),
+        startOffsetSec: stepTimings.at(-1)!.startOffsetSec,
+        endOffsetSec: stepTimings.at(-1)!.endOffsetSec,
       });
       break;
     }
@@ -133,12 +158,19 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
     executionError ??= error;
   }
 
-  const videoPath = path.join(outputDir, "demo.webm");
-  let videoSaved = false;
+  const rawVideoPath = path.join(outputDir, "recording-raw.webm");
+  let rawVideoSaved = false;
   try {
     if (!video) throw new Error("O navegador não produziu uma gravação");
-    await video.saveAs(videoPath);
-    videoSaved = true;
+    await video.saveAs(rawVideoPath);
+    rawVideoSaved = true;
+    // Playwright's own recording lands at a page-scoped path inside outputDir;
+    // saveAs() copies rather than moves it, which otherwise leaves that raw
+    // file sitting next to ours forever, doubling disk use per run.
+    const originalPath = await video.path().catch(() => null);
+    if (originalPath && path.resolve(originalPath) !== path.resolve(rawVideoPath)) {
+      await rm(originalPath, { force: true }).catch(() => {});
+    }
   } catch (error) {
     executionError ??= error;
   }
@@ -149,13 +181,28 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
     executionError ??= error;
   }
 
+  const videoPath = path.join(outputDir, "presentation.mp4");
+  const captionsPath = path.join(outputDir, "presentation.vtt");
+  let videoAvailable = false;
+  if (!executionError && rawVideoSaved) {
+    try {
+      const recordingDurationSec = await ffmpegVideoDurationSeconds(rawVideoPath);
+      const editSegments = buildEditTimeline(stepTimings, recordingDurationSec);
+      await composeEditedVideo(rawVideoPath, videoPath, editSegments, demo.viewport);
+      videoAvailable = true;
+      await writeFile(captionsPath, buildPresentationCaptions(demo.steps, stepReports, editSegments), "utf8");
+    } catch (error) {
+      executionError ??= error;
+    }
+  }
+
   const report: DemoExecutionReport = {
     demoName: demo.name,
     status: executionError ? "failed" : "passed",
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
-    videoPath: videoSaved ? videoPath : null,
-    steps,
+    videoPath: videoAvailable ? videoPath : null,
+    steps: stepReports,
     ...(executionError ? { error: errorMessage(executionError) } : {})
   };
   const reportPath = path.join(outputDir, "execution-report.json");
@@ -163,12 +210,13 @@ export async function runDemoWithReport(demo: Demo, outputRoot = "output"): Prom
 
   if (executionError) {
     throw new DemoRunError(errorMessage(executionError), {
-      videoPath: videoSaved ? videoPath : null,
+      videoPath: videoAvailable ? videoPath : null,
+      ...(videoAvailable ? { captionsPath } : {}),
       reportPath,
       report,
     }, { cause: executionError });
   }
-  return { videoPath, reportPath, report };
+  return { videoPath, captionsPath, reportPath, report };
 }
 
 export async function runDemo(demo: Demo, outputRoot = "output"): Promise<string> {

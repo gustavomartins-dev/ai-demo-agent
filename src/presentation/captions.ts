@@ -32,6 +32,8 @@ function fallbackCaption(step: DemoStep): string {
  * it the same demo steps, a passed/failed status per step, and the edit
  * timeline that maps each step's raw-recording window to the edited output.
  */
+const MIN_CUE_DISPLAY_SEC = 0.8;
+
 export function buildPresentationCaptions(
   demoSteps: DemoStep[],
   stepReports: Pick<StepExecutionReport, "index" | "status">[],
@@ -39,17 +41,30 @@ export function buildPresentationCaptions(
 ): string {
   const timestamp = (seconds: number) =>
     `00:${String(Math.floor(seconds / 60)).padStart(2, "0")}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
-  const cues: string[] = [];
-  for (const stepReport of stepReports) {
-    if (stepReport.status !== "passed") continue;
+
+  const rawCues = stepReports.flatMap((stepReport) => {
+    if (stepReport.status !== "passed") return [];
     const step = demoSteps[stepReport.index - 1];
     const segment = segments.find((candidate) => candidate.stepIndex === stepReport.index);
-    if (!step || !segment) continue;
+    if (!step || !segment) return [];
     const text = vttText(step.title ?? fallbackCaption(step));
-    if (!text) continue;
-    const outputStartSec = sourceTimeToOutputTime(segments, segment.sourceStartSec);
-    const outputEndSec = Math.max(outputStartSec + 0.8, sourceTimeToOutputTime(segments, segment.sourceEndSec));
-    cues.push(`${timestamp(outputStartSec)} --> ${timestamp(outputEndSec)}`, text, "");
+    if (!text) return [];
+    return [{
+      outputStartSec: sourceTimeToOutputTime(segments, segment.sourceStartSec),
+      outputEndSec: sourceTimeToOutputTime(segments, segment.sourceEndSec),
+      text,
+    }];
+  });
+
+  const cues: string[] = [];
+  for (const [index, cue] of rawCues.entries()) {
+    // A short step's own window can be shorter than a comfortable reading
+    // time, so pad it out — but never past the next cue's start, or two
+    // captions would sit on screen at once.
+    const nextStartSec = rawCues[index + 1]?.outputStartSec ?? Infinity;
+    const endSec = Math.min(Math.max(cue.outputEndSec, cue.outputStartSec + MIN_CUE_DISPLAY_SEC), nextStartSec);
+    if (endSec <= cue.outputStartSec) continue;
+    cues.push(`${timestamp(cue.outputStartSec)} --> ${timestamp(endSec)}`, cue.text, "");
   }
   return ["WEBVTT", "", ...cues].join("\n");
 }
