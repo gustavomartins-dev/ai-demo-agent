@@ -4,10 +4,10 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDesktopStepPrompt,
-  buildPresentationCaptions,
   desktopFramesHaveVisibleContent,
   runDesktopDemoWithReport,
 } from "../src/desktop/runner.js";
+import { buildPresentationCaptions } from "../src/presentation/captions.js";
 
 const plan = {
   objective: "Show the native dashboard",
@@ -116,7 +116,8 @@ describe("desktop Hermes runner", () => {
     // The second cue starts only after the first step's own edited window
     // (1.2s lead-in + step 1's 2s window = 3.2s), not at a linear fraction
     // of the total runtime.
-    const secondCueStart = captions.split("\n").find((line, index, lines) => lines[index + 1] === "Next reminder appears");
+    const captionLines = captions.split("\n");
+    const secondCueStart = captionLines.find((line: string, index: number) => captionLines[index + 1] === "Next reminder appears");
     expect(secondCueStart).toMatch(/^00:00:03\.200/);
   });
 

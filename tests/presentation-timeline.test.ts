@@ -4,7 +4,7 @@ import {
   buildEditTimeline,
   editTimelineDurationSec,
   sourceTimeToOutputTime,
-} from "../src/desktop/timeline.js";
+} from "../src/presentation/timeline.js";
 
 describe("buildEditTimeline", () => {
   it("compresses idle gaps hard while keeping each step's own window readable", () => {

@@ -8,9 +8,12 @@ import { z } from "zod";
 import type { HermesConfig } from "../hermes/config.js";
 import { hermesDemoPlanSchema, type HermesDemoPlan } from "../hermes/contract.js";
 import { DemoRunError, type DemoExecutionReport, type DemoRunResult, type StepExecutionReport } from "../runner.js";
+import type { DemoStep } from "../schema.js";
+import { buildPresentationCaptions } from "../presentation/captions.js";
 import { buildNarrationScript, loadNarrationConfig, synthesizeNarration } from "../presentation/narration.js";
+import { buildEditTimeline, type EditSegment, type StepTiming } from "../presentation/timeline.js";
+import { composeEditedVideo } from "../presentation/video.js";
 import { desktopProjectRoots, resolveDesktopLaunch } from "./launch.js";
-import { buildEditFilterGraph, buildEditTimeline, sourceTimeToOutputTime, type EditSegment, type StepTiming } from "./timeline.js";
 
 const execFileAsync = promisify(execFile);
 const ffmpegPath = createRequire(import.meta.url)("ffmpeg-static") as string | null;
@@ -248,14 +251,6 @@ export async function desktopVideoDuration(videoPath: string): Promise<number> {
   return Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
 }
 
-export async function composeEditedDesktopVideo(sourcePath: string, outputPath: string, segments: EditSegment[]): Promise<void> {
-  await execFileAsync(ffmpegPath ?? "ffmpeg", [
-    "-hide_banner", "-loglevel", "error", "-y", "-i", sourcePath,
-    "-filter_complex", buildEditFilterGraph(segments), "-map", "[outv]",
-    "-c:v", "libx264", "-preset", "veryfast", "-movflags", "+faststart", outputPath,
-  ], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-}
-
 export async function addNarrationToVideo(videoPath: string, narrationPath: string, outputPath: string): Promise<void> {
   // -shortest caps the mux at whichever of the two streams is shorter. The
   // narration script length is only an estimate of the edited video's final
@@ -308,55 +303,6 @@ function extractJson(response: string): unknown {
   const trimmed = response.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return JSON.parse(fenced?.[1] ?? trimmed);
-}
-
-function vttText(value: string): string {
-  return value.replaceAll(/\s+/g, " ").replaceAll("-->", "→").trim();
-}
-
-type DemoStep = HermesDemoPlan["demo"]["steps"][number];
-
-function targetLabel(target?: { role?: string; name?: string; text?: string; testId?: string; css?: string }): string {
-  if (!target) return "";
-  return target.name ?? target.text ?? target.role ?? target.testId ?? target.css ?? "";
-}
-
-function fallbackCaption(step: DemoStep): string {
-  switch (step.action) {
-    case "click": return `Clicking ${targetLabel(step.target)}`.trim();
-    case "fill": return `Filling in ${targetLabel(step.target)}`.trim();
-    case "press": return `Pressing ${step.key}`;
-    case "assertVisible": return `${targetLabel(step.target)} is visible`.trim();
-    default: return "";
-  }
-}
-
-/**
- * One caption cue per passed, on-screen step, timed to where that step
- * actually lands in the edited output — not a linear slice of the narration
- * summary across the whole runtime, which is what produced captions that cut
- * off mid-sentence and never matched what was happening on screen.
- */
-export function buildPresentationCaptions(
-  demoSteps: DemoStep[],
-  stepReports: Pick<StepExecutionReport, "index" | "status">[],
-  segments: EditSegment[],
-): string {
-  const timestamp = (seconds: number) =>
-    `00:${String(Math.floor(seconds / 60)).padStart(2, "0")}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
-  const cues: string[] = [];
-  for (const stepReport of stepReports) {
-    if (stepReport.status !== "passed") continue;
-    const step = demoSteps[stepReport.index - 1];
-    const segment = segments.find((candidate) => candidate.stepIndex === stepReport.index);
-    if (!step || !segment) continue;
-    const text = vttText(step.title ?? fallbackCaption(step));
-    if (!text) continue;
-    const outputStartSec = sourceTimeToOutputTime(segments, segment.sourceStartSec);
-    const outputEndSec = Math.max(outputStartSec + 0.8, sourceTimeToOutputTime(segments, segment.sourceEndSec));
-    cues.push(`${timestamp(outputStartSec)} --> ${timestamp(outputEndSec)}`, text, "");
-  }
-  return ["WEBVTT", "", ...cues].join("\n");
 }
 
 export function buildDesktopStepPrompt(step: DemoStep, stepNumber: number, totalSteps: number, pid: number, windowId?: string): string {
@@ -513,7 +459,7 @@ export async function runDesktopDemoWithReport(
       await (dependencies.validateVideo ?? validateDesktopVideo)(rawVideoPath);
       const recordingDurationSec = await (dependencies.videoDuration ?? desktopVideoDuration)(rawVideoPath);
       const editSegments = buildEditTimeline(stepTimings, recordingDurationSec);
-      await (dependencies.composeVideo ?? composeEditedDesktopVideo)(rawVideoPath, videoPath, editSegments);
+      await (dependencies.composeVideo ?? composeEditedVideo)(rawVideoPath, videoPath, editSegments);
       await (dependencies.validateVideo ?? validateDesktopVideo)(videoPath);
       await writeFile(captionsPath, buildPresentationCaptions(plan.demo.steps, stepReports, editSegments), "utf8");
       const narration = loadNarrationConfig();
