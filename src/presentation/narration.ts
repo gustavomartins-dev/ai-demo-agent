@@ -49,7 +49,7 @@ export async function synthesizeNarration(
       model: config.model,
       voice: config.voice,
       input: script,
-      instructions: "Speak in clear, warm, professional English at a concise portfolio-demo pace.",
+      instructions: "Speak in clear, warm, natural English as the developer presenting their own work. Keep a confident but conversational portfolio-demo pace. Do not sound like an advertisement or a dramatic trailer.",
       response_format: "wav",
     }),
     signal: AbortSignal.timeout(30_000),
