@@ -40,6 +40,7 @@ AI_DEMO_DESKTOP_GDK_BACKEND="x11"
 AI_DEMO_DESKTOP_GSK_RENDERER="cairo"
 AI_DEMO_XVFB_PATH="Xvfb"
 AI_DEMO_X11_WINDOW_MANAGER_PATH="openbox"
+AI_DEMO_XVFB_SCREEN_SIZE="1600x1000x24"
 ```
 
 `AI_DEMO_DESKTOP_PROJECT_ROOTS` uses the operating-system path delimiter when multiple roots are required. `AI_DEMO_FFMPEG_PATH` remains available to Hermes/cua-driver. On Linux, the host runner records the exact X11 window region as H.264 MP4 with GStreamer (`ximagesrc`, `videoconvert`, `x264enc`, and `mp4mux`) so recording does not depend on model-exposed tools.
@@ -58,6 +59,17 @@ to local executables when the packages are not installed system-wide. A portable
 Openbox bundle can instead be selected with `AI_DEMO_OPENBOX_ROOT`.
 
 `AI_DEMO_DESKTOP_GDK_BACKEND=x11` makes GTK applications visible to the bounded Linux Computer Use path. The worker requires `Xvfb`, `xprop`, `xwininfo`, `gst-launch-1.0`, and the listed GStreamer plugins. A web-only/headless deployment should leave desktop execution disabled by omitting the root allowlist.
+
+`AI_DEMO_XVFB_SCREEN_SIZE` defaults to `1600x1000x24`, larger than the default
+1280x720 output canvas. A virtual screen that only matched the output size
+clipped any application window taller or wider than that — the recorder
+captured exactly the window's geometry, and the window manager could not lay
+out more than the screen allowed.
+
+Window discovery waits up to 20 seconds and polls the launched process's
+liveness on every attempt; if the process exits first (a crash on launch, a
+missing dependency in the target's virtual environment) the run fails
+immediately with that cause instead of waiting out the full timeout.
 
 ## Water Reminder acceptance result
 

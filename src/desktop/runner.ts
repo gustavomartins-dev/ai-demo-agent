@@ -77,10 +77,22 @@ const defaultAppLauncher: AppLauncher = async (executable, args, cwd, runtimeEnv
   };
 };
 
-async function resolveX11WindowId(pid: number, timeoutMs = 10_000, environment: RuntimeEnvironment = process.env): Promise<string | undefined> {
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveX11WindowId(pid: number, timeoutMs = 20_000, environment: RuntimeEnvironment = process.env): Promise<string | undefined> {
   if (process.platform !== "linux") return undefined;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      throw new Error(`Desktop process ${pid} exited before its window appeared; it likely crashed on launch`);
+    }
     try {
       let windowIds: string[] = [];
       try {
@@ -151,7 +163,8 @@ async function startVirtualX11Display(): Promise<VirtualDisplay> {
   const openboxRoot = process.env.AI_DEMO_OPENBOX_ROOT;
   for (let displayNumber = 90; displayNumber <= 119; displayNumber += 1) {
     const display = `:${displayNumber}`;
-    const server = spawn(executable, [display, "-screen", "0", "1280x720x24", "-ac", "-nolisten", "tcp"], { stdio: "ignore" });
+    const screenSize = process.env.AI_DEMO_XVFB_SCREEN_SIZE ?? "1600x1000x24";
+    const server = spawn(executable, [display, "-screen", "0", screenSize, "-ac", "-nolisten", "tcp"], { stdio: "ignore" });
     try {
       await new Promise<void>((resolve, reject) => {
         server.once("spawn", resolve);
@@ -411,7 +424,7 @@ export async function runDesktopDemoWithReport(
       ? await dependencies.resolveWindowId(app.pid)
       : dependencies.launchApp
         ? undefined
-        : await resolveX11WindowId(app.pid, 10_000, runtimeEnvironment);
+        : await resolveX11WindowId(app.pid, 20_000, runtimeEnvironment);
     if (process.platform === "linux" && !dependencies.launchApp && !windowId) {
       throw new Error(`No X11 window was found for desktop process ${app.pid}`);
     }
