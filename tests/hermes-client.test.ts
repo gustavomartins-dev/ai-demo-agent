@@ -10,7 +10,8 @@ const validPlan = {
     name: "homepage",
     steps: [
       { action: "goto", url: "https://example.com" },
-      { action: "assertVisible", target: { role: "heading", name: "Example Domain" } }
+      { action: "click", target: { role: "link", name: "More information" } },
+      { action: "assertVisible", target: { role: "heading", name: "IANA-managed Reserved Domains" } }
     ]
   }
 };
@@ -75,6 +76,26 @@ describe("HermesClient", () => {
     })).rejects.toThrow("não segue o contrato esperado");
   });
 
+  it("rejects a passive web plan that never interacts with the page", async () => {
+    const passivePlan = {
+      ...validPlan,
+      demo: {
+        ...validPlan.demo,
+        steps: [
+          { action: "goto", url: "https://example.com" },
+          { action: "assertVisible", target: { role: "heading", name: "Example Domain" } }
+        ]
+      }
+    };
+    const runner = vi.fn().mockResolvedValue({ stdout: JSON.stringify(passivePlan), stderr: "" });
+    const client = new HermesClient({ command: "hermes", timeoutMs: 120_000 }, runner);
+
+    await expect(client.createDemoPlan({
+      url: "https://example.com",
+      objective: "Show the homepage"
+    })).rejects.toThrow("passive web plan without a meaningful user interaction");
+  });
+
   it("wraps process failures with an actionable error", async () => {
     const runner = vi.fn().mockRejectedValue(new Error("timed out"));
     const client = new HermesClient({ command: "hermes", timeoutMs: 1_000 }, runner);
@@ -96,6 +117,8 @@ describe("buildHermesPlanningPrompt", () => {
     expect(prompt).toContain("Show the homepage");
     expect(prompt).toContain("Do not invent features");
     expect(prompt).toContain("assertVisible");
+    expect(prompt).toContain("at least one meaningful, safe click, fill, or press action");
+    expect(prompt).toContain("Every step must include a title");
   });
 
   it("builds a native accessibility plan for desktop projects", () => {
@@ -109,5 +132,6 @@ describe("buildHermesPlanningPrompt", () => {
     expect(prompt).toContain("native desktop product demo");
     expect(prompt).toContain("Do not use goto");
     expect(prompt).toContain("accessibility role/name");
+    expect(prompt).toContain("Every step must include a title");
   });
 });

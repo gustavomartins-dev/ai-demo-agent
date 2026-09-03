@@ -57,6 +57,7 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
       "click and assertVisible require target; fill requires target and value; press requires target and key; wait requires milliseconds between 0 and 10000.",
       "A target must be an object using role/name or visible text. Do not use goto for a desktop demo.",
       "Targets may use role/name or visible text. Do not use browser CSS or test IDs.",
+      "Every step must include a title: a short present-tense caption of 3 to 8 words describing exactly what becomes visible on screen during that step (e.g. \"Setting a 30-minute manual interval\", \"Dashboard shows the active countdown\"). This caption is burned into the final video, so it must read clearly on its own without the rest of the plan.",
       "Keep the journey short, reversible, and free of destructive actions or external communication.",
       "Planning input:",
       JSON.stringify(input),
@@ -67,12 +68,14 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
     "You are planning a reproducible browser product demo.",
     "Inspect only the authorized URL and use the repository context provided below.",
     "Do not invent features. Every important result must be confirmed with an assertVisible step.",
+    "The demo must contain at least one meaningful, safe click, fill, or press action that changes the visible page state, followed by assertVisible evidence of that result. A sequence made only of goto, wait, and assertVisible steps is invalid because it does not demonstrate how the product works.",
     "Return only one valid JSON object, with no Markdown or commentary.",
     "The JSON must contain: objective, summary, assumptions, warnings, and demo.",
     "Write summary as a narration-ready English portfolio script of 45 to 60 words in first person: briefly explain why I built the product, how the implementation works, and what the viewer will visibly do. Avoid sales language, hype, generic claims, and unsupported technical details.",
     "demo must contain name, optional viewport, and steps using only these actions:",
     "goto, click, fill, press, wait, assertVisible.",
     "Targets may use role/name, text, testId, or css. Prefer role/name or testId over css.",
+    "Every step must include a title: a short present-tense caption of 3 to 8 words describing exactly what becomes visible on screen during that step (e.g. \"Opening the pricing page\", \"Confirmation banner appears\"). This caption is burned into the final video, so it must read clearly on its own without the rest of the plan.",
     "Planning input:",
     JSON.stringify(input)
   ].join("\n");
@@ -121,8 +124,10 @@ export class HermesClient {
 
     try {
       const plan = hermesDemoPlanSchema.parse(extractJson(result.stdout));
-      if (parsedRequest.kind === "DESKTOP" && !plan.demo.steps.some((step) => ["click", "fill", "press"].includes(step.action))) {
-        throw new HermesClientError("Hermes returned a passive desktop plan without a meaningful user interaction");
+      if (!plan.demo.steps.some((step) => ["click", "fill", "press"].includes(step.action))) {
+        throw new HermesClientError(
+          `Hermes returned a passive ${parsedRequest.kind.toLowerCase()} plan without a meaningful user interaction`
+        );
       }
       return plan;
     } catch (error) {
