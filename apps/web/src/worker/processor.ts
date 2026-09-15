@@ -3,6 +3,11 @@ import path from "node:path";
 import { HermesClient } from "../../../../src/hermes/client.js";
 import { loadHermesConfig } from "../../../../src/hermes/config.js";
 import { hermesDemoPlanSchema, type HermesDemoPlan, type HermesPlanningRequest } from "../../../../src/hermes/contract.js";
+import { HermesAiProvider } from "../../../../src/ai/hermes-provider.js";
+import { readGitHubRepositorySnapshot } from "../../../../src/github/repository.js";
+import { LaunchPackageGenerator } from "../../../../src/launch/generator.js";
+import type { LaunchPackageContext, LaunchPackageDraft } from "../../../../src/launch/contract.js";
+import { repositorySnapshotSchema, type RepositorySnapshot } from "../../../../src/repository/contract.js";
 import { DemoRunError, runDemoWithReport, type DemoRunResult } from "../../../../src/runner.js";
 import { runDesktopDemoWithReport } from "../../../../src/desktop/runner.js";
 import { desktopProjectRoots, resolveDesktopLaunch } from "../../../../src/desktop/launch.js";
@@ -12,13 +17,15 @@ import type { SocialDraftBundle, VerifiedSocialContext } from "../../../../src/s
 import { artifactStorageKey, registerRecordingArtifacts, type RecordingArtifacts } from "../data/generation-artifacts.js";
 import { markGenerationRunPlanning, saveGenerationRunPlan } from "../data/generation-plan.js";
 import { saveSocialDraftBundle } from "../data/social-drafts.js";
+import { saveLaunchPackageDraft } from "../data/launch-packages.js";
+import { githubAccessTokenForOwner } from "../data/github-access.js";
 import type { ClaimedGenerationRun } from "../data/generation-queue.js";
 import type { GenerationProcessor } from "./runtime.js";
 
-type Planner = { createDemoPlan(request: HermesPlanningRequest): Promise<HermesDemoPlan> };
+type Planner = { createDemoPlan(request: HermesPlanningRequest, signal?: AbortSignal): Promise<HermesDemoPlan> };
 type PlanStore = {
   markPlanning(runId: string, workerId: string): Promise<boolean>;
-  savePlan(runId: string, workerId: string, plan: HermesDemoPlan): Promise<boolean>;
+  savePlan(runId: string, workerId: string, plan: HermesDemoPlan, repositorySnapshot?: RepositorySnapshot): Promise<boolean>;
 };
 type Recorder = (demo: HermesDemoPlan["demo"], outputRoot: string) => Promise<DemoRunResult>;
 type DesktopRecorder = (
@@ -33,8 +40,10 @@ type ArtifactStore = (
   outputRoot: string,
   succeeded: boolean,
 ) => Promise<boolean>;
-type SocialGenerator = { createDrafts(context: VerifiedSocialContext): Promise<SocialDraftBundle> };
+type SocialGenerator = { createDrafts(context: VerifiedSocialContext, signal?: AbortSignal): Promise<SocialDraftBundle> };
 type SocialStore = (runId: string, workerId: string, bundle: SocialDraftBundle, context: VerifiedSocialContext) => Promise<boolean>;
+type RepositoryReader = (repositoryUrl: string, options: { token?: string; signal?: AbortSignal }) => Promise<RepositorySnapshot>;
+type LaunchGenerator = { createPackage(context: LaunchPackageContext, signal?: AbortSignal): Promise<LaunchPackageDraft> };
 type DraftingProcessor = (
   run: ClaimedGenerationRun,
   context: { workerId: string; signal: AbortSignal },
@@ -45,7 +54,11 @@ function ensureActive(signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new Error("Generation processing was aborted");
 }
 
-export function createHermesPlanningProcessor(planner: Planner, store: PlanStore): GenerationProcessor {
+export function createHermesPlanningProcessor(
+  planner: Planner,
+  store: PlanStore,
+  repository?: { read: RepositoryReader; tokenForOwner(ownerId: string): Promise<string | undefined> },
+): GenerationProcessor {
   return async (run, context) => {
     ensureActive(context.signal);
     if (!(await store.markPlanning(run.id, context.workerId))) {
@@ -54,6 +67,7 @@ export function createHermesPlanningProcessor(planner: Planner, store: PlanStore
 
     let desktop: { projectPath: string; launchCommand: string } | undefined;
     let localReadme: string | undefined;
+    let repositorySnapshot: RepositorySnapshot | undefined;
     if ((run.project.kind ?? "WEB") === "DESKTOP") {
       if (!run.project.localPath || !run.project.launchCommand) throw new Error("Desktop project launch configuration is incomplete");
       const launch = await resolveDesktopLaunch(run.project.localPath, run.project.launchCommand, desktopProjectRoots());
@@ -65,6 +79,13 @@ export function createHermesPlanningProcessor(planner: Planner, store: PlanStore
       }
     }
 
+    if (run.project.ownerId && run.project.repositoryUrl && repository && /^https:\/\/(?:www\.)?github\.com\//i.test(run.project.repositoryUrl)) {
+      repositorySnapshot = await repository.read(run.project.repositoryUrl, {
+        token: await repository.tokenForOwner(run.project.ownerId),
+        signal: context.signal,
+      });
+    }
+
     const request: HermesPlanningRequest = {
       kind: run.project.kind ?? "WEB",
       url: run.project.productUrl,
@@ -73,13 +94,20 @@ export function createHermesPlanningProcessor(planner: Planner, store: PlanStore
       ...(run.project.repositoryUrl || desktop ? { repository: {
         ...(run.project.repositoryUrl ? { url: run.project.repositoryUrl } : {}),
         ...(desktop ? { path: desktop.projectPath } : {}),
-        ...(localReadme ? { readme: localReadme } : {}),
+        ...(repositorySnapshot?.readme?.content || localReadme ? { readme: repositorySnapshot?.readme?.content ?? localReadme } : {}),
+        ...(repositorySnapshot ? {
+          revision: repositorySnapshot.sourceSha,
+          files: repositorySnapshot.files.map((file) => ({ path: file.path, content: file.content })),
+        } : {}),
       } } : {}),
     };
-    const plan = hermesDemoPlanSchema.parse(await planner.createDemoPlan(request));
+    const plan = hermesDemoPlanSchema.parse(await planner.createDemoPlan(request, context.signal));
     ensureActive(context.signal);
 
-    if (!(await store.savePlan(run.id, context.workerId, plan))) {
+    const saved = repositorySnapshot
+      ? await store.savePlan(run.id, context.workerId, plan, repositorySnapshot)
+      : await store.savePlan(run.id, context.workerId, plan);
+    if (!saved) {
       throw new Error("Generation run lease was lost while saving the Hermes plan");
     }
   };
@@ -170,20 +198,39 @@ export function createSocialDraftingProcessor(
   generator: SocialGenerator,
   store: SocialStore,
   outputRoot: string,
+  launch?: {
+    generator: LaunchGenerator;
+    save(runId: string, workerId: string, draft: LaunchPackageDraft): Promise<boolean>;
+  },
 ): DraftingProcessor {
   return async (run, context, suppliedArtifacts) => {
     ensureActive(context.signal);
     const plan = hermesDemoPlanSchema.parse(run.plan);
     const artifacts = suppliedArtifacts ?? await persistedArtifacts(run, outputRoot);
+    const repositorySnapshot = run.repositorySnapshot ? repositorySnapshotSchema.parse(run.repositorySnapshot) : undefined;
     const socialContext = createVerifiedSocialContext({
       project: run.project,
       objective: run.objective,
       plan,
       report: artifacts.report,
       evidenceKeysByStep: evidenceKeys(artifacts, outputRoot),
+      repositorySources: repositorySnapshot?.files.map((file) => ({ path: file.path, content: file.content })) ?? [],
       mentionCandidates: [],
     });
-    const bundle = await generator.createDrafts(socialContext);
+    if (launch && repositorySnapshot && (run.project.kind ?? "WEB") === "WEB" && run.project.repositoryUrl) {
+      const launchPackage = await launch.generator.createPackage({
+        project: { name: run.project.name, productUrl: run.project.productUrl, repositoryUrl: run.project.repositoryUrl },
+        objective: run.objective,
+        demoSummary: plan.summary,
+        repository: repositorySnapshot,
+        verifiedClaims: socialContext.verifiedClaims,
+      }, context.signal);
+      ensureActive(context.signal);
+      if (!(await launch.save(run.id, context.workerId, launchPackage))) {
+        throw new Error("Generation run lease was lost while saving the launch package");
+      }
+    }
+    const bundle = await generator.createDrafts(socialContext, context.signal);
     ensureActive(context.signal);
     if (!(await store(run.id, context.workerId, bundle, socialContext))) {
       throw new Error("Generation run lease was lost while saving social drafts");
@@ -191,16 +238,19 @@ export function createSocialDraftingProcessor(
   };
 }
 
-const hermesClient = new HermesClient(loadHermesConfig());
+const hermesConfig = loadHermesConfig();
+const hermesClient = new HermesClient(hermesConfig);
 const planningProcessor = createHermesPlanningProcessor(hermesClient, {
   markPlanning: markGenerationRunPlanning,
   savePlan: saveGenerationRunPlan,
-});
-const socialClient = new HermesSocialClient(loadHermesConfig());
+}, { read: readGitHubRepositorySnapshot, tokenForOwner: githubAccessTokenForOwner });
+const socialClient = new HermesSocialClient(hermesConfig);
+const launchPackageGenerator = new LaunchPackageGenerator(new HermesAiProvider(hermesConfig));
 const draftingProcessor = createSocialDraftingProcessor(
   socialClient,
   saveSocialDraftBundle,
   process.env.AI_DEMO_OUTPUT_ROOT ?? "output",
+  { generator: launchPackageGenerator, save: saveLaunchPackageDraft },
 );
 const recordingProcessor = createPlaywrightRecordingProcessor(
   runDemoWithReport,
@@ -209,7 +259,7 @@ const recordingProcessor = createPlaywrightRecordingProcessor(
   draftingProcessor,
 );
 const desktopRecordingProcessor = createDesktopRecordingProcessor(
-  (plan, desktop, outputRoot) => runDesktopDemoWithReport(plan, desktop, loadHermesConfig(), outputRoot),
+  (plan, desktop, outputRoot) => runDesktopDemoWithReport(plan, desktop, hermesConfig, outputRoot),
   registerRecordingArtifacts,
   process.env.AI_DEMO_OUTPUT_ROOT ?? "output",
   draftingProcessor,

@@ -105,11 +105,12 @@ export async function publishApprovedOwnedSocialDraft(
     await db.$transaction(async (transaction) => {
       await transaction.publishAttempt.update({ where: { id: prepared.attemptId }, data: { status: "SUCCEEDED", providerPostId: result.providerPostId, providerPostUrl: result.providerPostUrl, completedAt: new Date() } });
       await transaction.socialDraft.update({ where: { id: prepared.draftId }, data: { status: "PUBLISHED", publishedPostId: result.providerPostId, publishedPostUrl: result.providerPostUrl, publishedAt: new Date() } });
-      const [totalDrafts, publishedDrafts] = await Promise.all([
+      const [totalDrafts, publishedDrafts, launchPackage] = await Promise.all([
         transaction.socialDraft.count({ where: { generationRunId: prepared.runId } }),
         transaction.socialDraft.count({ where: { generationRunId: prepared.runId, status: "PUBLISHED" } }),
+        transaction.launchPackage.findUnique({ where: { generationRunId: prepared.runId }, select: { status: true } }),
       ]);
-      if (totalDrafts >= 2 && publishedDrafts === totalDrafts) {
+      if (totalDrafts >= 2 && publishedDrafts === totalDrafts && (!launchPackage || launchPackage.status === "PUBLISHED")) {
         await transaction.generationRun.update({ where: { id: prepared.runId }, data: { status: "PUBLISHED" } });
         await transaction.project.update({ where: { id: prepared.projectId }, data: { status: "PUBLISHED" } });
       }

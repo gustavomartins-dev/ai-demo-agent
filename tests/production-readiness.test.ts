@@ -11,6 +11,8 @@ const valid = {
   AUTH_GITHUB_SECRET: "github-secret",
   AUTH_URL: "https://demo.example",
   APP_OWNER_GITHUB_LOGIN: "owner",
+  GITHUB_LAUNCH_TOKEN: "fine-grained-token",
+  GITHUB_API_VERSION: "2026-03-10",
   APP_BASE_URL: "https://demo.example",
   SOCIAL_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   SOCIAL_TOKEN_ENCRYPTION_KEY_ID: "v1",
@@ -32,6 +34,7 @@ describe("production readiness", () => {
     expect(() => validateProductionEnvironment({ ...valid, SOCIAL_TOKEN_ENCRYPTION_KEY: Buffer.alloc(16).toString("base64") })).toThrow(/32 bytes/);
     expect(() => validateProductionEnvironment({ ...valid, AI_DEMO_OUTPUT_ROOT: "output" })).toThrow();
     expect(() => validateProductionEnvironment({ ...valid, X_CLIENT_ID: "" })).toThrow();
+    expect(() => validateProductionEnvironment({ ...valid, GITHUB_LAUNCH_TOKEN: "" })).toThrow();
     expect(() => validateProductionEnvironment({ ...valid, AUTH_URL: "https://other.example" })).toThrow(/same origin/);
   });
 

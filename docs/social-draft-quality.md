@@ -8,15 +8,17 @@ A successful Hermes command is not, by itself, a quality result.
 
 ## Quality gates
 
-`evaluateSocialDraftBundle` reports five checks:
+`evaluateSocialDraftBundle` reports seven checks:
 
 | Check | What it protects |
 | --- | --- |
 | `schema` | Required fields, English language marker, X's 280-character limit, and LinkedIn's 3,000-character limit |
 | `english_only` | Multiple deterministic Portuguese-language signals in post content |
+| `portfolio_voice` | Sales language or copy that does not sound like the engineer explaining their own work |
 | `required_links` | Missing repository URL when the project is open source |
 | `supported_mentions` | Invented identities or mention reasons not present in verified candidates |
 | `grounded_claims` | Claim IDs without a passed Playwright step and stored screenshot |
+| `grounded_sources` | Implementation source paths absent from the bounded repository snapshot |
 
 The language check is intentionally deterministic, so CI produces the same
 answer every time. It catches the Portuguese adversarial fixture but is not a
@@ -89,6 +91,5 @@ Before merging a prompt, contract, or model-setting change, require:
 - a production dependency audit;
 - human review of both platform drafts from at least one real completed run.
 
-Publishing remains out of scope. No eval result authorizes an external post;
-the owner must review and explicitly approve content in a later publishing
-workflow.
+No eval result authorizes an external post. The owner must still review and
+approve the exact content, then invoke the separate publish action.

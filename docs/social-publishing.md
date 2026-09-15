@@ -7,6 +7,9 @@ publishes. The external request occurs only after a second explicit
 **Publish approved post** action and always sends the immutable approved
 snapshot rather than mutable editor state.
 
+Overall project status reaches `PUBLISHED` only after both social drafts and,
+when present, the GitHub `LaunchPackage` have all published successfully.
+
 ## Safety and idempotency
 
 Approval stores `approvedContent`, its SHA-256 `approvedContentHash`, the owner

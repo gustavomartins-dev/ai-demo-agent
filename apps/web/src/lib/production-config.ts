@@ -11,6 +11,8 @@ const schema = z.object({
   AUTH_GITHUB_SECRET: required,
   AUTH_URL: z.string().url().refine((value) => value.startsWith("https://"), "AUTH_URL must use HTTPS in production"),
   APP_OWNER_GITHUB_LOGIN: required,
+  GITHUB_LAUNCH_TOKEN: required,
+  GITHUB_API_VERSION: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   APP_BASE_URL: z.string().url().refine((value) => value.startsWith("https://"), "APP_BASE_URL must use HTTPS in production"),
   SOCIAL_TOKEN_ENCRYPTION_KEY: required,
   SOCIAL_TOKEN_ENCRYPTION_KEY_ID: required,

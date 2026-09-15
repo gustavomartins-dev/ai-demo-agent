@@ -3,17 +3,18 @@
 ## Product outcome
 
 The web app queues a `GenerationRun`; a separate worker claims it, asks Hermes
-for a validated plan, records that plan with Playwright, and uses the verified
-browser evidence to create separate English drafts for X and LinkedIn.
+for a validated plan, records that plan with Playwright, and combines the
+verified browser evidence with a bounded GitHub repository snapshot to create
+the launch package and separate English drafts for X and LinkedIn.
 
 ```text
 Next.js ──► PostgreSQL queue ──► generation worker
                                       │
-                         Hermes: validated plan
+                 GitHub snapshot + Hermes validated plan
                                       │
                       Playwright: video + evidence
                                       │
-                    Hermes: X + LinkedIn drafts
+              Hermes: GitHub package + X/LinkedIn drafts
                                       │
                                       ▼
                               READY_FOR_REVIEW
@@ -62,8 +63,8 @@ by the operating system take precedence.
 | `PLANNING` | Hermes is generating the browser plan |
 | `PLANNED` | Validated plan is persisted and waiting for recording |
 | `RECORDING` | Playwright is executing and capturing evidence |
-| `DRAFTING` | Hermes is writing validated X and LinkedIn drafts from browser evidence |
-| `READY_FOR_REVIEW` | Video, evidence, and both drafts are persisted for owner review |
+| `DRAFTING` | Hermes is writing the validated GitHub package and X/LinkedIn drafts from repository sources and browser evidence |
+| `READY_FOR_REVIEW` | Video, evidence, GitHub package, and both social drafts are persisted for owner review |
 | `FAILED` | Automatic attempts are exhausted; owner can retry manually |
 
 Planning failures return to `QUEUED`. Recording failures return to `PLANNED`,
@@ -83,6 +84,8 @@ preserves a valid persisted plan when one exists.
 | `AI_DEMO_OUTPUT_ROOT` | `../../output` locally | Persistent directory for video, JSON reports, and screenshots |
 | `AI_DEMO_HERMES_COMMAND` | `hermes` | Local Hermes executable |
 | `AI_DEMO_HERMES_TIMEOUT_MS` | `120000` | Maximum planning command duration |
+| `GITHUB_LAUNCH_TOKEN` | unset locally; required in production | Server-only fine-grained token for repository reads and owner-approved GitHub publishing |
+| `GITHUB_API_VERSION` | `2026-03-10` | Version sent to the official GitHub REST API |
 | `OPENAI_API_KEY` | unset | Enables English OpenAI text-to-speech narration; captions remain available without it |
 | `AI_DEMO_TTS_MODEL` | `gpt-4o-mini-tts` | OpenAI speech model used for portfolio narration |
 | `AI_DEMO_TTS_VOICE` | `marin` | OpenAI voice used for narration |
@@ -145,7 +148,9 @@ the run. Never edit `workerId` or lease timestamps manually.
 
 ## Current boundary
 
-The worker creates drafts but never publishes them. Verified mention candidates
-are not connected yet, so generated mention lists remain empty by default.
-Editing, approval, account OAuth, and publishing stay behind later explicit
-owner actions so generation cannot accidentally publish content.
+The worker never publishes. It only creates editable review artifacts.
+`AiProvider` separates structured generation from the provider, while Hermes
+remains the configured production provider and primary planner. Verified
+mention candidates are not connected yet, so mention lists remain empty by
+default. GitHub, X, and LinkedIn each require a later owner approval followed
+by a separate explicit publish action.

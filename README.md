@@ -2,7 +2,7 @@
   <img src="./docs/assets/ai-demo-agent-crest.png" width="240" alt="AI Demo Agent crest with a verified camera lens and agent cursor" />
   <h1>🎬 AI Demo Agent</h1>
   <p><strong>Turn working software into an evidence-backed product demo—without manually recording the screen.</strong></p>
-  <p>Plan, operate, verify, record, caption, narrate, and prepare social drafts behind a human approval gate.</p>
+  <p>Plan, operate, verify, record, package, approve, and publish a project launch through official APIs.</p>
   <p>
     <img src="https://img.shields.io/badge/Next.js-dashboard-000000?style=for-the-badge&logo=nextdotjs" alt="Next.js dashboard" />
     <img src="https://img.shields.io/badge/Playwright-browser_agent-2EAD33?style=for-the-badge&logo=playwright&logoColor=white" alt="Playwright browser agent" />
@@ -17,9 +17,10 @@
 
 ## The promise
 
-AI Demo Agent does not invent features. Every claim that reaches a demo or
-social draft must be connected to something visibly verified during execution,
-and nothing is published without explicit owner approval.
+AI Demo Agent does not invent features. Every claim that reaches a demo,
+repository package, or social draft must be connected to visible execution
+evidence or a captured repository source, and nothing is published without
+explicit owner approval.
 
 ## What works today
 
@@ -29,8 +30,9 @@ and nothing is published without explicit owner approval.
 4. The runner records video, screenshots, step evidence, and a structured report.
 5. The presentation removes idle time and adds English WebVTT captions.
 6. Optional OpenAI text-to-speech produces concise English narration.
-7. Hermes drafts separate first-person posts for X and LinkedIn using verified claims only.
-8. The owner reviews, edits, and approves before any future publishing action.
+7. Hermes generates a structured launch package: README, GitHub description, release notes, and separate first-person posts for X and LinkedIn.
+8. The owner independently reviews and approves immutable GitHub, X, and LinkedIn snapshots.
+9. Explicit publish actions use the official GitHub, X, and LinkedIn APIs with idempotent attempt records.
 
 ## From product to proof
 
@@ -41,10 +43,10 @@ flowchart LR
     Plan --> Operate["Playwright or Computer Use"]
     Operate --> Evidence["Video + screenshots + report"]
     Evidence --> Present["Trim + captions + optional narration"]
-    Present --> Drafts["X + LinkedIn drafts"]
-    Drafts --> Review{"Owner review"}
-    Review -->|Approve later| Publish["Publishing boundary"]
-    Review -->|Reject or edit| Drafts
+    Present --> Package["README + release + X/LinkedIn drafts"]
+    Package --> Review{"Owner review"}
+    Review -->|Explicit approval + publish| Publish["Official provider APIs"]
+    Review -->|Edit| Package
 ```
 
 ## 🧭 Product surfaces
@@ -52,11 +54,12 @@ flowchart LR
 | Surface | Responsibility |
 | --- | --- |
 | Next.js dashboard | GitHub OAuth, projects, generation runs, evidence review |
-| PostgreSQL | Durable state, job leases, retry state, social-account metadata |
-| Generation worker | Long-running planning, recording, presentation, and drafting |
-| Hermes Agent | Plan creation, desktop operation, evidence-grounded writing |
+| PostgreSQL | Durable state, job leases, immutable approvals, and publication attempts |
+| Generation worker | Repository analysis, planning, recording, presentation, and package generation |
+| Hermes Agent | Primary structured planner, desktop operator, and evidence-grounded writer behind `AiProvider` |
 | Playwright | Deterministic browser interaction, screenshots, and WebM recording |
 | OpenAI Audio API | Optional English narration; captions work without it |
+| GitHub/X/LinkedIn APIs | Owner-triggered publication of exact approved snapshots |
 
 The worker is intentionally separate from Next.js because planning and screen
 recording can outlive an HTTP request. PostgreSQL leases prevent two workers
@@ -160,6 +163,7 @@ Focused safety checks are available through:
 
 ```bash
 npm run test:social-safety
+npm run test:launch-safety
 npm run validate:production
 ```
 
@@ -172,19 +176,22 @@ and production readiness.
 - generated claims must trace back to visible evidence;
 - generation retries preserve already-valid plans and artifacts;
 - desktop commands are resolved without a shell and must stay inside approved roots;
-- secrets are redacted from logs and never included in generated posts;
+- repository reads are bounded, skip secret/generated paths, and are pinned to a commit SHA;
+- GitHub publishing stops if that commit or README changed after generation;
+- secrets are kept server-side, omitted from errors, and never included in generated content;
 - narration is optional and uses a credential separate from Hermes;
-- current generation creates drafts but does **not** publish them.
+- approval and publication are separate explicit owner actions;
+- identical approvals have one durable publication attempt, preventing duplicate submissions.
 
 ## 📚 Documentation
 
 - [`docs/generation-worker.md`](docs/generation-worker.md) — queue, leases, retries, storage, and deployment;
+- [`docs/github-launch-publishing.md`](docs/github-launch-publishing.md) — repository grounding, approval, GitHub permissions, and incident handling;
 - [`docs/desktop-app-demos.md`](docs/desktop-app-demos.md) — native-app recording workflow;
 - [`docs/`](docs/) — architecture, integrations, operations, and safety decisions.
 
 ## 🗺️ Roadmap
 
-- complete the owner-reviewed social publishing flow;
 - connect verified mentions and platform-specific media rules;
 - move persistent artifacts from a mounted volume to object storage;
 - expand evals for evidence quality, claim quality, and presentation pacing.

@@ -8,6 +8,7 @@ social publications.
 - `User` — the owner of the personal workspace.
 - `Project` — a repository and running product submitted for launch creation.
 - `GenerationRun` — one attempt to understand, record, and prepare a project.
+- `GenerationRun.repositorySnapshot` — a bounded, commit-pinned copy of the source files used to ground generated technical claims.
 - `MediaAsset` — a video, thumbnail, captions file, evidence screenshot, or
   execution report produced by a run.
 - `SocialDraft` — the English-only X or LinkedIn post prepared for review.
@@ -18,6 +19,10 @@ social publications.
   verifier used once during a callback.
 - `PublishAttempt` — one durable, idempotent external request for an exact
   approved content hash, including sanitized outcome and provider identity.
+- `LaunchPackage` — the editable README, repository description, release tag,
+  release notes, provenance, immutable approval, and final GitHub identities.
+- `GitHubPublishAttempt` — the idempotency and incident record for one approved
+  GitHub package hash.
 
 ## Lifecycle
 
@@ -25,11 +30,15 @@ social publications.
 Project
   └─ GenerationRun
        ├─ MediaAsset[]
-       └─ SocialDraft[X, LINKEDIN]
+       ├─ SocialDraft[X, LINKEDIN]
+       │    └─ PublishAttempt[]
+       └─ LaunchPackage
+            └─ GitHubPublishAttempt[]
 ```
 
-Each run can have at most one draft per platform. Draft approval and publication
-are separate states, so approving LinkedIn never implicitly approves X.
+Each run can have at most one draft per platform and one GitHub launch package.
+All three approval and publication paths are independent; completing one never
+implicitly authorizes either of the others.
 
 ## Security boundary
 

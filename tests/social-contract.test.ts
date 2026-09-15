@@ -105,4 +105,18 @@ describe("platform draft contracts", () => {
       linkedin: { ...validBundle.linkedin, content: "A verified product launch." },
     }, context)).toThrow(/repository URL/);
   });
+
+  it("requires source provenance when repository code is available", () => {
+    expect(() => validateDraftBundleAgainstContext(validBundle, {
+      ...context,
+      repositorySources: [{ path: "src/app.ts", content: "export const workflow = true;" }],
+    })).toThrow(/cite at least one available repository source/);
+    expect(validateDraftBundleAgainstContext({
+      x: { ...validBundle.x, sourcePaths: ["src/app.ts"] },
+      linkedin: { ...validBundle.linkedin, sourcePaths: ["src/app.ts"] },
+    }, {
+      ...context,
+      repositorySources: [{ path: "src/app.ts", content: "export const workflow = true;" }],
+    }).x.sourcePaths).toEqual(["src/app.ts"]);
+  });
 });

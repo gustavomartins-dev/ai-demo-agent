@@ -9,6 +9,12 @@ import { disconnectOwnedSocialAccount } from "@/data/social-accounts";
 import { parseSocialOAuthPlatform } from "@/lib/social-oauth/config";
 import { approveOwnedSocialDraft } from "@/data/social-drafts";
 import { publishApprovedOwnedSocialDraft } from "@/data/social-publishing";
+import {
+  approveOwnedLaunchPackage,
+  publishApprovedOwnedLaunchPackage,
+  updateOwnedLaunchPackage,
+} from "@/data/launch-packages";
+import { launchPackageEditFromFormData, launchPackageEditSchema } from "@/lib/launch-package-input";
 
 export type CreateProjectState = {
   status: "idle" | "error" | "success";
@@ -19,6 +25,52 @@ export type CreateProjectState = {
 export type SaveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
 export type ApproveSocialDraftState = { status: "idle" | "error" | "success"; message: string };
 export type PublishSocialDraftState = { status: "idle" | "error" | "success"; message: string; url?: string };
+export type LaunchPackageActionState = { status: "idle" | "error" | "success"; message: string; url?: string };
+
+export async function saveLaunchPackageAction(
+  _previousState: LaunchPackageActionState,
+  formData: FormData,
+): Promise<LaunchPackageActionState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const validated = launchPackageEditSchema.safeParse(launchPackageEditFromFormData(formData));
+  if (!validated.success) return { status: "error", message: validated.error.issues[0]?.message ?? "Invalid launch package." };
+  const { packageId, ...input } = validated.data;
+  const saved = await updateOwnedLaunchPackage(session.user.id, packageId, input);
+  if (!saved) return { status: "error", message: "This launch package is no longer editable." };
+  revalidatePath(`/projects/${saved.projectId}`);
+  return { status: "success", message: "Launch package saved. Its previous approval, if any, was cleared." };
+}
+
+export async function approveLaunchPackageAction(
+  _previousState: LaunchPackageActionState,
+  formData: FormData,
+): Promise<LaunchPackageActionState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const packageId = formData.get("packageId");
+  if (typeof packageId !== "string" || !packageId.trim()) return { status: "error", message: "Invalid launch package." };
+  const approved = await approveOwnedLaunchPackage(session.user.id, packageId);
+  if (!approved) return { status: "error", message: "This package cannot be approved in its current state." };
+  revalidatePath(`/projects/${approved.projectId}`);
+  return { status: "success", message: "README, repository description, release notes, and tag were frozen. Nothing was published." };
+}
+
+export async function publishLaunchPackageAction(
+  _previousState: LaunchPackageActionState,
+  formData: FormData,
+): Promise<LaunchPackageActionState> {
+  const session = await auth();
+  if (!session?.user?.id) return { status: "error", message: "Authentication required." };
+  const packageId = formData.get("packageId");
+  if (typeof packageId !== "string" || !packageId.trim()) return { status: "error", message: "Invalid launch package." };
+  const outcome = await publishApprovedOwnedLaunchPackage(session.user.id, packageId);
+  if (outcome.projectId) revalidatePath(`/projects/${outcome.projectId}`);
+  if (outcome.status === "published") return { status: "success", message: "GitHub README, description, and release were published.", url: outcome.url };
+  if (outcome.status === "already_handled") return { status: "error", message: "This exact approval already has a publication attempt, so no duplicate was created.", ...(outcome.url ? { url: outcome.url } : {}) };
+  if (outcome.status === "failed") return { status: "error", message: `GitHub publishing stopped (${outcome.code}). Ambiguous attempts are not retried automatically.`, };
+  return { status: "error", message: "Publishing requires an approved package and a GitHub token with repository write access." };
+}
 
 export async function publishSocialDraftAction(
   _previousState: PublishSocialDraftState,

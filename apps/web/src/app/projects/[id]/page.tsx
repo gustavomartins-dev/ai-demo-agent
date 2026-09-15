@@ -7,6 +7,9 @@ import { RetryButton } from "@/app/retry-button";
 import { SocialDraftEditor } from "@/app/social-draft-editor";
 import { SocialDraftApproval } from "@/app/social-draft-approval";
 import { SocialDraftPublish } from "@/app/social-draft-publish";
+import { LaunchPackageEditor } from "@/app/launch-package-editor";
+import { LaunchPackageApproval } from "@/app/launch-package-approval";
+import { LaunchPackagePublish } from "@/app/launch-package-publish";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +33,8 @@ const statusCopy: Record<string, string> = {
   PLANNING: "Hermes is building and validating the demo plan.",
   PLANNED: "The validated plan is waiting for browser recording.",
   RECORDING: "Playwright is recording the verified browser flow.",
-  DRAFTING: "Hermes is writing evidence-grounded English social drafts.",
-  READY_FOR_REVIEW: "Video, evidence, and social drafts are ready for your review.",
+  DRAFTING: "Hermes is writing the evidence-grounded GitHub launch package and social drafts.",
+  READY_FOR_REVIEW: "Video, evidence, GitHub package, and social drafts are ready for your review.",
   FAILED: "Processing stopped after the available automatic attempts.",
 };
 
@@ -97,6 +100,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                       </>}
                     </div>
                     <div className="mt-5 rounded-2xl border border-white/8 bg-black/20 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-medium">GitHub launch package</h4><p className="mt-1 text-xs text-zinc-600">Review the README, repository description, release notes, and semantic version before any external change.</p></div><span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">Explicit approval and publish required</span></div>
+                      {run.launchPackage ? <>
+                        <div className="mt-4 flex flex-wrap items-center gap-3"><Status value={run.launchPackage.status} /><span className="text-xs text-zinc-500">{run.launchPackage.repositoryOwner}/{run.launchPackage.repositoryName} · {run.launchPackage.defaultBranch}</span><span className="font-mono text-[10px] text-zinc-700">source {run.launchPackage.sourceSha.slice(0, 12)}</span></div>
+                        <LaunchPackageEditor value={run.launchPackage} locked={run.launchPackage.status === "PUBLISHED" || run.launchPackage.status === "PUBLISHING"} />
+                        <LaunchPackageApproval packageId={run.launchPackage.id} approvedAt={run.launchPackage.approvedAt} disabled={run.launchPackage.status === "PUBLISHED" || run.launchPackage.status === "PUBLISHING"} />
+                        <LaunchPackagePublish packageId={run.launchPackage.id} status={run.launchPackage.status} publishedUrl={run.launchPackage.publishedReleaseUrl} />
+                        <div className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Repository sources used</p><p className="mt-2 break-words font-mono text-[10px] leading-5 text-zinc-600">{Array.isArray(run.launchPackage.sourcePaths) ? run.launchPackage.sourcePaths.join(" · ") : "No source provenance available."}</p></div>
+                      </> : <p className="mt-5 text-sm text-zinc-600">A package is generated after a verified web recording when the project has a GitHub repository URL.</p>}
+                    </div>
+                    <div className="mt-5 rounded-2xl border border-white/8 bg-black/20 p-5">
                       <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-medium">Social review</h4><p className="mt-1 text-xs text-zinc-600">Compare and edit each English draft independently.</p></div><span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">Explicit approval and publish required</span></div>
                       <div className="mt-5 grid gap-5 xl:grid-cols-2">
                         {(["X", "LINKEDIN"] as const).map((platform) => {
@@ -104,7 +117,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                           const draftMentions = mentions(draft?.mentions);
                           const draftEvidence = evidence(draft?.evidence);
                           return <section key={platform} className="rounded-2xl border border-white/8 bg-[#111114] p-5">
-                            <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">{platform === "LINKEDIN" ? "LinkedIn" : "X"}</p><p className="mt-1 text-[11px] text-zinc-600">{platform === "LINKEDIN" ? "Formal product narrative" : "Concise launch update"}</p></div>{draft ? <Status value={draft.status} /> : <span className="text-[10px] text-zinc-600">Not generated</span>}</div>
+                            <div className="flex items-center justify-between"><div><p className="text-sm font-semibold">{platform === "LINKEDIN" ? "LinkedIn" : "X"}</p><p className="mt-1 text-[11px] text-zinc-600">{platform === "LINKEDIN" ? "Engineering story and decisions" : "Concise builder update"}</p></div>{draft ? <Status value={draft.status} /> : <span className="text-[10px] text-zinc-600">Not generated</span>}</div>
                             {draft ? <>
                               <SocialDraftEditor draftId={draft.id} platform={platform} initialContent={draft.content} />
                               <SocialDraftApproval draftId={draft.id} approvedAt={draft.approvedAt} />

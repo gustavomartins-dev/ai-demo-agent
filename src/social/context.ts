@@ -12,6 +12,7 @@ export type VerifiedSocialContextInput = {
   plan: HermesDemoPlan;
   report: DemoExecutionReport;
   evidenceKeysByStep: Record<number, string>;
+  repositorySources?: VerifiedSocialContext["repositorySources"];
   mentionCandidates?: MentionCandidate[];
 };
 
@@ -46,6 +47,7 @@ export function createVerifiedSocialContext(input: VerifiedSocialContextInput): 
     objective: input.objective,
     demoSummary: input.plan.summary,
     verifiedClaims,
+    repositorySources: input.repositorySources ?? [],
     mentionCandidates: input.mentionCandidates ?? [],
   });
 }

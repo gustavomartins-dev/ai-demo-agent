@@ -18,8 +18,9 @@ Internet -> HTTPS/domain -> Next.js web
 ```
 
 The web process owns GitHub login, social OAuth callbacks, review, approval,
-media delivery, and explicit publishing. The worker owns Hermes planning,
-Playwright recording, and social draft generation. Both use one PostgreSQL
+media delivery, and explicit GitHub/X/LinkedIn publishing. The worker owns
+bounded GitHub source analysis, Hermes planning, Playwright recording, and
+launch-package generation. Both use one PostgreSQL
 database and the same `AI_DEMO_OUTPUT_ROOT`; the volume must survive releases
 and be mounted at the same absolute path.
 
@@ -33,9 +34,9 @@ npm run db:deploy
 ```
 
 The validator fails closed unless PostgreSQL, Auth.js/GitHub, the owner
-allowlist, HTTPS base URL, token encryption, X, LinkedIn, API version, Hermes,
-and an absolute artifact path are configured. It validates shape, not network
-access or provider approval.
+allowlist, HTTPS base URL, the fine-grained GitHub launch token and API version,
+token encryption, X, LinkedIn, Hermes, and an absolute artifact path are
+configured. It validates shape, not network access or provider approval.
 
 Configure provider callbacks from `APP_BASE_URL` exactly:
 
@@ -67,8 +68,8 @@ back only to a version compatible with the current schema.
 - Restore drill: restore PostgreSQL and artifacts, mount the volume read-only,
   confirm media IDs resolve, then enable worker writes and provider actions.
 
-Do not delete `PublishAttempt` records during retention cleanup. They are the
-duplicate-publication and incident audit trail.
+Do not delete `PublishAttempt` or `GitHubPublishAttempt` records during
+retention cleanup. They are the duplicate-publication and incident audit trail.
 
 ## Logs, metrics, and alerts
 
@@ -95,10 +96,10 @@ publishing volume. Alert before the artifact volume reaches 80% capacity.
 3. HTTPS, secure cookies, GitHub owner login, and all three callbacks work.
 4. PostgreSQL and artifact backup/restore drills have evidence.
 5. Web and worker share the durable volume and media range requests work.
-6. Hermes/provider model and cost limits are pinned.
+6. Hermes/provider model and timeouts are pinned; the GitHub API version is explicit.
 7. X and LinkedIn show the correct owner identity and required scopes.
-8. Run one controlled private/test project through video and draft review.
-9. Publish one controlled post per platform, verify URLs, then delete the test
+8. Run one controlled repository through video, launch-package, and draft review.
+9. Publish one controlled GitHub release and one post per platform, verify URLs, then delete the test
    posts manually if appropriate.
 10. Confirm double-click protection, disconnect/reconnect, alerts, dashboards,
     and the incident owner before enabling normal use.

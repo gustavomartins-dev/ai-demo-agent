@@ -3,9 +3,9 @@
 ## Product outcome
 
 The workspace can connect the owner's own X and LinkedIn identities without
-sharing passwords or exposing provider tokens to the browser. This foundation
-does not publish content. Callback routes and account controls are delivered in
-the next issue.
+sharing passwords or exposing provider tokens to the browser. Connecting an
+account never publishes content; an immutable draft approval and a second
+explicit publish action remain required.
 
 ## Official flows and permissions
 
@@ -114,6 +114,7 @@ Callback results shown in the dashboard:
 
 ## Current boundary
 
-Real account connection and local disconnection are implemented. Publishing is
-still impossible. Issue #33 adds explicit approval of immutable draft snapshots
-before any provider create-post API is introduced.
+Real account connection, local disconnection, immutable approval, and explicit
+official-API publishing are implemented. Remote revocation still happens in
+the provider console, and verified mention discovery remains intentionally
+absent.

@@ -5,9 +5,10 @@ import { retryDelayMs } from "@/lib/generation-queue-policy";
 
 const activeStatuses = ["ANALYZING", "PLANNING", "RECORDING", "DRAFTING"] as const;
 
-export type ClaimedGenerationRun = GenerationRun & {
+export type ClaimedGenerationRun = Omit<GenerationRun, "repositorySnapshot"> & {
+  repositorySnapshot?: GenerationRun["repositorySnapshot"];
   project: Pick<Project, "id" | "name" | "productUrl" | "repositoryUrl" | "isOpenSource"> &
-    Partial<Pick<Project, "kind" | "localPath" | "launchCommand">>;
+    Partial<Pick<Project, "ownerId" | "kind" | "localPath" | "launchCommand">>;
   assets?: Pick<MediaAsset, "type" | "status" | "storageKey">[];
 };
 
@@ -45,7 +46,11 @@ export async function claimGenerationRun(
         FROM "GenerationRun"
         WHERE "attemptCount" < "maxAttempts"
           AND (
-            ("status" IN ('QUEUED', 'PLANNED', 'DRAFTING') AND "nextAttemptAt" <= (${now} AT TIME ZONE 'UTC'))
+            (
+              "status" IN ('QUEUED', 'PLANNED', 'DRAFTING')
+              AND "nextAttemptAt" <= (${now} AT TIME ZONE 'UTC')
+              AND ("workerId" IS NULL OR "leaseExpiresAt" < (${now} AT TIME ZONE 'UTC'))
+            )
             OR (
               "status" IN ('ANALYZING', 'PLANNING', 'RECORDING', 'DRAFTING')
               AND "leaseExpiresAt" < (${now} AT TIME ZONE 'UTC')
@@ -58,6 +63,7 @@ export async function claimGenerationRun(
       UPDATE "GenerationRun" AS run
       SET "status" = CASE
             WHEN candidate."status" = 'PLANNED' THEN 'RECORDING'::"RunStatus"
+            WHEN candidate."status" = 'RECORDING' THEN 'RECORDING'::"RunStatus"
             WHEN candidate."status" = 'DRAFTING' THEN 'DRAFTING'::"RunStatus"
             ELSE 'ANALYZING'::"RunStatus"
           END,
@@ -80,7 +86,7 @@ export async function claimGenerationRun(
       where: { id: runId, workerId },
       include: {
         project: {
-          select: { id: true, name: true, kind: true, productUrl: true, repositoryUrl: true, isOpenSource: true, localPath: true, launchCommand: true },
+          select: { id: true, ownerId: true, name: true, kind: true, productUrl: true, repositoryUrl: true, isOpenSource: true, localPath: true, launchCommand: true },
         },
         assets: {
           where: { status: "READY", type: { in: ["EXECUTION_REPORT", "EVIDENCE", "VIDEO"] } },

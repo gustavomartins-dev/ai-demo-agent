@@ -1,7 +1,7 @@
 import { socialDraftBundleSchema, verifiedSocialContextSchema } from "./contract.js";
 
 export type SocialEvalCheck = {
-  name: "schema" | "english_only" | "portfolio_voice" | "required_links" | "supported_mentions" | "grounded_claims";
+  name: "schema" | "english_only" | "portfolio_voice" | "required_links" | "supported_mentions" | "grounded_claims" | "grounded_sources";
   passed: boolean;
   detail: string;
 };
@@ -82,6 +82,15 @@ export function evaluateSocialDraftBundle(input: unknown, contextInput: unknown)
       return Boolean(claim?.evidenceStorageKey && claim.stepIndex > 0);
     })),
     detail: "Every referenced claim must resolve to a passed Playwright step with stored evidence.",
+  });
+
+  const knownSources = new Set(context.repositorySources.map((source) => source.path));
+  checks.push({
+    name: "grounded_sources",
+    passed: drafts.every((draft) =>
+      (knownSources.size === 0 || draft.sourcePaths.length > 0)
+      && draft.sourcePaths.every((sourcePath) => knownSources.has(sourcePath))),
+    detail: "Every referenced implementation source must be present in the bounded repository snapshot.",
   });
 
   return { passed: checks.every((check) => check.passed), checks };

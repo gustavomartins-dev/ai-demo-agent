@@ -27,6 +27,10 @@ export const verifiedSocialContextSchema = z.object({
   objective: z.string().trim().min(1),
   demoSummary: z.string().trim().min(1),
   verifiedClaims: z.array(verifiedClaimSchema).min(1),
+  repositorySources: z.array(z.object({
+    path: z.string().trim().min(1),
+    content: z.string().max(16_000),
+  })).max(24).default([]),
   mentionCandidates: z.array(mentionCandidateSchema).default([]),
 });
 
@@ -40,6 +44,7 @@ export const xDraftSchema = z.object({
   language: z.literal("en"),
   content: z.string().trim().min(1).max(280),
   claimIds: z.array(z.string()).min(1),
+  sourcePaths: z.array(z.string().trim().min(1)).default([]),
   mentions: z.array(mentionSuggestionSchema).default([]),
 });
 
@@ -48,6 +53,7 @@ export const linkedInDraftSchema = z.object({
   language: z.literal("en"),
   content: z.string().trim().min(1).max(3_000),
   claimIds: z.array(z.string()).min(1),
+  sourcePaths: z.array(z.string().trim().min(1)).default([]),
   mentions: z.array(mentionSuggestionSchema).default([]),
 });
 
@@ -58,6 +64,7 @@ export const socialDraftBundleSchema = z.object({
 
 export type MentionCandidate = z.infer<typeof mentionCandidateSchema>;
 export type VerifiedSocialContext = z.infer<typeof verifiedSocialContextSchema>;
+export type VerifiedSocialContextInput = z.input<typeof verifiedSocialContextSchema>;
 export type SocialDraftBundle = z.infer<typeof socialDraftBundleSchema>;
 
 export function validateDraftBundleAgainstContext(
@@ -67,10 +74,17 @@ export function validateDraftBundleAgainstContext(
   const context = verifiedSocialContextSchema.parse(contextInput);
   const bundle = socialDraftBundleSchema.parse(input);
   const allowedClaims = new Set(context.verifiedClaims.map((claim) => claim.id));
+  const allowedSources = new Set(context.repositorySources.map((source) => source.path));
 
   for (const draft of [bundle.x, bundle.linkedin]) {
+    if (context.repositorySources.length > 0 && draft.sourcePaths.length === 0) {
+      throw new Error(`${draft.platform} draft must cite at least one available repository source`);
+    }
     for (const claimId of draft.claimIds) {
       if (!allowedClaims.has(claimId)) throw new Error(`${draft.platform} draft references unsupported claim ${claimId}`);
+    }
+    for (const sourcePath of draft.sourcePaths) {
+      if (!allowedSources.has(sourcePath)) throw new Error(`${draft.platform} draft references unavailable source file ${sourcePath}`);
     }
     const candidates = context.mentionCandidates.filter((candidate) => candidate.platform === draft.platform);
     for (const mention of draft.mentions) {

@@ -1,6 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { ZodError } from "zod";
+import { AiProviderError, HermesAiProvider, type AiCommandRunner } from "../ai/hermes-provider.js";
+import { formatAiRequest, type AiRequest } from "../ai/provider.js";
 import type { HermesConfig } from "./config.js";
 import {
   hermesDemoPlanSchema,
@@ -9,25 +8,6 @@ import {
   type HermesPlanningRequest
 } from "./contract.js";
 
-const execFileAsync = promisify(execFile);
-
-type CommandResult = { stdout: string; stderr: string };
-type CommandRunner = (
-  command: string,
-  args: string[],
-  options: { timeout: number }
-) => Promise<CommandResult>;
-
-const defaultCommandRunner: CommandRunner = async (command, args, options) => {
-  const result = await execFileAsync(command, args, {
-    encoding: "utf8",
-    maxBuffer: 2 * 1024 * 1024,
-    timeout: options.timeout
-  });
-
-  return { stdout: result.stdout, stderr: result.stderr };
-};
-
 export class HermesClientError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -35,11 +15,11 @@ export class HermesClientError extends Error {
   }
 }
 
-export function buildHermesPlanningPrompt(request: HermesPlanningRequest): string {
+function planningRequest(request: HermesPlanningRequest, signal?: AbortSignal): AiRequest {
   const input = hermesPlanningRequestSchema.parse(request);
 
   if (input.kind === "DESKTOP") {
-    return [
+    return { task: "demo-plan", instructions: [
       "You are planning a reproducible native desktop product demo.",
       "Use only documented repository context and the stated launch objective.",
       "Do not execute the application during planning and do not invent features.",
@@ -59,14 +39,13 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
       "Targets may use role/name or visible text. Do not use browser CSS or test IDs.",
       "Every step must include a title: a short present-tense caption of 3 to 8 words describing exactly what becomes visible on screen during that step (e.g. \"Setting a 30-minute manual interval\", \"Dashboard shows the active countdown\"). This caption is burned into the final video, so it must read clearly on its own without the rest of the plan.",
       "Keep the journey short, reversible, and free of destructive actions or external communication.",
-      "Planning input:",
-      JSON.stringify(input),
-    ].join("\n");
+    ], input, signal };
   }
 
-  return [
+  return { task: "demo-plan", instructions: [
     "You are planning a reproducible browser product demo.",
-    "Inspect only the authorized URL and use the repository context provided below.",
+    "Inspect only the authorized URL and use only the supplied repository snapshot as code evidence.",
+    "A repository URL is an identifier, not evidence. Treat only the supplied README and source files as repository facts.",
     "Do not invent features. Every important result must be confirmed with an assertVisible step.",
     "The demo must contain at least one meaningful, safe click, fill, or press action that changes the visible page state, followed by assertVisible evidence of that result. A sequence made only of goto, wait, and assertVisible steps is invalid because it does not demonstrate how the product works.",
     "Return only one valid JSON object, with no Markdown or commentary.",
@@ -76,54 +55,24 @@ export function buildHermesPlanningPrompt(request: HermesPlanningRequest): strin
     "goto, click, fill, press, wait, assertVisible.",
     "Targets may use role/name, text, testId, or css. Prefer role/name or testId over css.",
     "Every step must include a title: a short present-tense caption of 3 to 8 words describing exactly what becomes visible on screen during that step (e.g. \"Opening the pricing page\", \"Confirmation banner appears\"). This caption is burned into the final video, so it must read clearly on its own without the rest of the plan.",
-    "Planning input:",
-    JSON.stringify(input)
-  ].join("\n");
+  ], input, signal };
 }
 
-function extractJson(response: string): unknown {
-  const trimmed = response.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  const candidate = fenced?.[1] ?? trimmed;
-
-  try {
-    return JSON.parse(candidate);
-  } catch (error) {
-    throw new HermesClientError("O Hermes não retornou um JSON válido", { cause: error });
-  }
+export function buildHermesPlanningPrompt(request: HermesPlanningRequest): string {
+  return formatAiRequest(planningRequest(request));
 }
 
 export class HermesClient {
   constructor(
     private readonly config: HermesConfig,
-    private readonly runCommand: CommandRunner = defaultCommandRunner
+    private readonly runCommand?: AiCommandRunner,
   ) {}
 
-  async createDemoPlan(request: HermesPlanningRequest): Promise<HermesDemoPlan> {
+  async createDemoPlan(request: HermesPlanningRequest, signal?: AbortSignal): Promise<HermesDemoPlan> {
     const parsedRequest = hermesPlanningRequestSchema.parse(request);
-    const args = ["--oneshot", buildHermesPlanningPrompt(parsedRequest)];
-    if (this.config.model) args.push("--model", this.config.model);
-    if (this.config.provider) args.push("--provider", this.config.provider);
-
-    let result: CommandResult;
+    const provider = new HermesAiProvider(this.config, this.runCommand);
     try {
-      result = await this.runCommand(this.config.command, args, { timeout: this.config.timeoutMs });
-    } catch (error) {
-      throw new HermesClientError(
-        `Falha ao executar o Hermes Agent pelo comando "${this.config.command}"`,
-        { cause: error }
-      );
-    }
-
-    if (!result.stdout.trim()) {
-      const detail = result.stderr.trim();
-      throw new HermesClientError(
-        detail ? `O Hermes não retornou um plano: ${detail}` : "O Hermes não retornou um plano"
-      );
-    }
-
-    try {
-      const plan = hermesDemoPlanSchema.parse(extractJson(result.stdout));
+      const { value: plan } = await provider.generateStructured(planningRequest(parsedRequest, signal), hermesDemoPlanSchema);
       if (!plan.demo.steps.some((step) => ["click", "fill", "press"].includes(step.action))) {
         throw new HermesClientError(
           `Hermes returned a passive ${parsedRequest.kind.toLowerCase()} plan without a meaningful user interaction`
@@ -132,14 +81,13 @@ export class HermesClient {
       return plan;
     } catch (error) {
       if (error instanceof HermesClientError) throw error;
-      if (error instanceof ZodError) {
-        const detail = error.issues
-          .slice(0, 3)
-          .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
-          .join("; ");
-        throw new HermesClientError(`O plano retornado pelo Hermes não segue o contrato esperado: ${detail}`, {
-          cause: error
-        });
+      if (error instanceof AiProviderError) {
+        if (error.code === "invalid_json") throw new HermesClientError("O Hermes não retornou um JSON válido", { cause: error });
+        if (error.code === "invalid_structure") {
+          throw new HermesClientError(`O plano retornado pelo Hermes não segue o contrato esperado: ${error.message}`, { cause: error });
+        }
+        if (error.code === "empty_response") throw new HermesClientError("O Hermes não retornou um plano", { cause: error });
+        throw new HermesClientError(`Falha ao executar o Hermes Agent pelo comando "${this.config.command}"`, { cause: error });
       }
       throw error;
     }

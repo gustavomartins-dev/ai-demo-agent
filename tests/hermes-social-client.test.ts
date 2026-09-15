@@ -21,6 +21,7 @@ const bundle = {
     language: "en",
     content: "I built a verified review workflow to keep approval explicit. https://github.com/example/ai-demo-agent",
     claimIds: ["claim-2"],
+    sourcePaths: [],
     mentions: [],
   },
   linkedin: {
@@ -28,6 +29,7 @@ const bundle = {
     language: "en",
     content: "I built and verified a review workflow. https://github.com/example/ai-demo-agent",
     claimIds: ["claim-2"],
+    sourcePaths: [],
     mentions: [],
   },
 };

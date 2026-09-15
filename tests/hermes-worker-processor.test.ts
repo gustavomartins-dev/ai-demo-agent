@@ -55,7 +55,7 @@ describe("Hermes generation processor", () => {
       url: "https://example.com",
       objective: "Show the homepage",
       repository: { url: "https://github.com/example/product" },
-    });
+    }, expect.any(AbortSignal));
     expect(store.savePlan).toHaveBeenCalledWith(
       "run-1",
       "worker-1",
@@ -75,5 +75,30 @@ describe("Hermes generation processor", () => {
     const store = { markPlanning: vi.fn().mockResolvedValue(false), savePlan: vi.fn() };
     await expect(createHermesPlanningProcessor(planner, store)(run(), { workerId: "worker-1", signal: new AbortController().signal })).rejects.toThrow(/lease was lost/);
     expect(planner.createDemoPlan).not.toHaveBeenCalled();
+  });
+
+  it("grounds planning in the exact GitHub revision when repository access is available", async () => {
+    const currentRun = { ...run(), project: { ...run().project, ownerId: "owner-1" } };
+    const snapshot = {
+      provider: "github" as const,
+      owner: "example",
+      name: "product",
+      defaultBranch: "main",
+      sourceSha: "commit-1",
+      repositoryDescription: null,
+      readme: { path: "README.md", sha: "readme-1", content: "# Product" },
+      files: [{ path: "README.md", sha: "readme-1", content: "# Product" }],
+    };
+    const planner = { createDemoPlan: vi.fn().mockResolvedValue(plan) };
+    const store = { markPlanning: vi.fn().mockResolvedValue(true), savePlan: vi.fn().mockResolvedValue(true) };
+    const repository = { read: vi.fn().mockResolvedValue(snapshot), tokenForOwner: vi.fn().mockResolvedValue("token") };
+
+    await createHermesPlanningProcessor(planner, store, repository)(currentRun, { workerId: "worker-1", signal: new AbortController().signal });
+
+    expect(repository.read).toHaveBeenCalledWith("https://github.com/example/product", expect.objectContaining({ token: "token" }));
+    expect(planner.createDemoPlan).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.objectContaining({ revision: "commit-1", readme: "# Product", files: [{ path: "README.md", content: "# Product" }] }),
+    }), expect.any(AbortSignal));
+    expect(store.savePlan).toHaveBeenCalledWith("run-1", "worker-1", expect.anything(), snapshot);
   });
 });

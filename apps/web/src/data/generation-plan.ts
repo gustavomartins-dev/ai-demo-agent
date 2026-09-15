@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import type { HermesDemoPlan } from "../../../../src/hermes/contract.js";
+import type { RepositorySnapshot } from "../../../../src/repository/contract.js";
 import { db } from "../lib/db.js";
 
 export async function markGenerationRunPlanning(runId: string, workerId: string): Promise<boolean> {
@@ -15,6 +16,7 @@ export async function saveGenerationRunPlan(
   runId: string,
   workerId: string,
   plan: HermesDemoPlan,
+  repositorySnapshot?: RepositorySnapshot,
 ): Promise<boolean> {
   return db.$transaction(async (transaction) => {
     const result = await transaction.generationRun.updateMany({
@@ -22,6 +24,7 @@ export async function saveGenerationRunPlan(
       data: {
         status: "PLANNED",
         plan: plan as unknown as Prisma.InputJsonValue,
+        ...(repositorySnapshot ? { repositorySnapshot: repositorySnapshot as unknown as Prisma.InputJsonValue } : {}),
         workerId: null,
         leaseExpiresAt: null,
         lastHeartbeatAt: null,

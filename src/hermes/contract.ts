@@ -12,8 +12,13 @@ export const hermesPlanningRequestSchema = z.object({
   repository: z.object({
     url: z.string().url().optional(),
     path: z.string().min(1).optional(),
-    readme: z.string().min(1).optional()
-  }).refine((repository) => repository.url || repository.path || repository.readme, {
+    readme: z.string().min(1).optional(),
+    revision: z.string().min(1).optional(),
+    files: z.array(z.object({
+      path: z.string().min(1),
+      content: z.string().max(16_000),
+    })).max(24).optional(),
+  }).refine((repository) => repository.url || repository.path || repository.readme || repository.files?.length, {
     message: "Repository context must contain a URL, path, or README"
 }).optional()
 }).superRefine((request, context) => {

@@ -79,19 +79,20 @@ enum PublishAttemptStatus {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  name           String?
-  email          String?         @unique
-  emailVerified  DateTime?
-  image          String?
-  accounts       Account[]
-  sessions       Session[]
-  projects       Project[]
-  socialAccounts SocialAccount[]
-  socialOAuthAttempts SocialOAuthAttempt[]
-  approvedSocialDrafts SocialDraft[] @relation("SocialDraftApprover")
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id                     String               @id @default(cuid())
+  name                   String?
+  email                  String?              @unique
+  emailVerified          DateTime?
+  image                  String?
+  accounts               Account[]
+  sessions               Session[]
+  projects               Project[]
+  socialAccounts         SocialAccount[]
+  socialOAuthAttempts    SocialOAuthAttempt[]
+  approvedSocialDrafts   SocialDraft[]        @relation("SocialDraftApprover")
+  approvedLaunchPackages LaunchPackage[]      @relation("LaunchPackageApprover")
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 }
 
 model Account {
@@ -138,7 +139,7 @@ model Project {
   name            String
   repositoryUrl   String?
   productUrl      String
-  kind            ProjectKind    @default(WEB)
+  kind            ProjectKind     @default(WEB)
   localPath       String?
   launchCommand   String?
   isOpenSource    Boolean         @default(false)
@@ -153,25 +154,27 @@ model Project {
 }
 
 model GenerationRun {
-  id              String        @id @default(cuid())
-  projectId       String
-  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  objective       String
-  status          RunStatus     @default(QUEUED)
-  plan            Json?
-  error           String?
-  attemptCount    Int           @default(0)
-  maxAttempts     Int           @default(3)
-  workerId        String?
-  leaseExpiresAt  DateTime?
-  lastHeartbeatAt DateTime?
-  nextAttemptAt   DateTime      @default(now())
-  assets          MediaAsset[]
-  socialDrafts    SocialDraft[]
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                 String         @id @default(cuid())
+  projectId          String
+  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  objective          String
+  status             RunStatus      @default(QUEUED)
+  plan               Json?
+  repositorySnapshot Json?
+  error              String?
+  attemptCount       Int            @default(0)
+  maxAttempts        Int            @default(3)
+  workerId           String?
+  leaseExpiresAt     DateTime?
+  lastHeartbeatAt    DateTime?
+  nextAttemptAt      DateTime       @default(now())
+  assets             MediaAsset[]
+  socialDrafts       SocialDraft[]
+  launchPackage      LaunchPackage?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -196,32 +199,85 @@ model MediaAsset {
 }
 
 model SocialDraft {
-  id               String         @id @default(cuid())
-  generationRunId  String
-  generationRun    GenerationRun  @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
-  platform         SocialPlatform
-  status           DraftStatus    @default(DRAFT)
-  language         String         @default("en")
-  content          String
-  mentions         Json?
-  claimIds         Json?
-  evidence         Json?
-  repositoryUrl    String?
-  publishedPostId  String?
-  publishedPostUrl String?
-  approvedAt       DateTime?
-  approvedContent  String?
+  id                  String           @id @default(cuid())
+  generationRunId     String
+  generationRun       GenerationRun    @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+  platform            SocialPlatform
+  status              DraftStatus      @default(DRAFT)
+  language            String           @default("en")
+  content             String
+  mentions            Json?
+  claimIds            Json?
+  sourcePaths         Json?
+  evidence            Json?
+  repositoryUrl       String?
+  publishedPostId     String?
+  publishedPostUrl    String?
+  approvedAt          DateTime?
+  approvedContent     String?
   approvedContentHash String?
-  approvedByUserId String?
-  approvedBy       User?          @relation("SocialDraftApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  publishAttempts  PublishAttempt[]
-  publishedAt      DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  approvedByUserId    String?
+  approvedBy          User?            @relation("SocialDraftApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  publishAttempts     PublishAttempt[]
+  publishedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   @@unique([generationRunId, platform])
   @@index([status])
   @@index([approvedByUserId])
+}
+
+model LaunchPackage {
+  id                    String                 @id @default(cuid())
+  generationRunId       String                 @unique
+  generationRun         GenerationRun          @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+  status                DraftStatus            @default(DRAFT)
+  repositoryOwner       String
+  repositoryName        String
+  defaultBranch         String
+  sourceSha             String
+  repositoryDescription String
+  readmeMarkdown        String
+  releaseTag            String
+  releaseTitle          String
+  releaseNotesMarkdown  String
+  sourcePaths           Json
+  claimIds              Json
+  approvedSnapshot      Json?
+  approvedContentHash   String?
+  approvedAt            DateTime?
+  approvedByUserId      String?
+  approvedBy            User?                  @relation("LaunchPackageApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  publishedCommitSha    String?
+  publishedReleaseId    String?
+  publishedReleaseUrl   String?
+  publishedAt           DateTime?
+  publishAttempts       GitHubPublishAttempt[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([status])
+  @@index([approvedByUserId])
+}
+
+model GitHubPublishAttempt {
+  id              String               @id @default(cuid())
+  launchPackageId String
+  launchPackage   LaunchPackage        @relation(fields: [launchPackageId], references: [id], onDelete: Cascade)
+  approvalHash    String
+  status          PublishAttemptStatus @default(STARTED)
+  commitSha       String?
+  releaseId       String?
+  releaseUrl      String?
+  errorCode       String?
+  startedAt       DateTime             @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([launchPackageId, approvalHash])
+  @@index([status, startedAt])
 }
 
 model PublishAttempt {
@@ -243,20 +299,20 @@ model PublishAttempt {
 }
 
 model SocialAccount {
-  id                String              @id @default(cuid())
-  userId            String
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  platform          SocialPlatform
-  status            SocialAccountStatus @default(DISCONNECTED)
-  externalAccountId String?
-  displayName       String?
-  handle            String?
-  scopes            String[]            @default([])
+  id                     String              @id @default(cuid())
+  userId                 String
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform               SocialPlatform
+  status                 SocialAccountStatus @default(DISCONNECTED)
+  externalAccountId      String?
+  displayName            String?
+  handle                 String?
+  scopes                 String[]            @default([])
   authorizationExpiresAt DateTime?
-  connectedAt       DateTime?
-  credential        SocialCredential?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  connectedAt            DateTime?
+  credential             SocialCredential?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   @@unique([userId, platform])
   @@unique([platform, externalAccountId])

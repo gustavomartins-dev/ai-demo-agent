@@ -42,6 +42,23 @@ export type ProjectDetail = {
     maxAttempts: number;
     nextAttemptAt: string;
     assets: Array<{ id: string; type: string; status: string; storageKey: string; mimeType: string }>;
+    launchPackage: {
+      id: string;
+      status: string;
+      repositoryOwner: string;
+      repositoryName: string;
+      defaultBranch: string;
+      sourceSha: string;
+      repositoryDescription: string;
+      readmeMarkdown: string;
+      releaseTag: string;
+      releaseTitle: string;
+      releaseNotesMarkdown: string;
+      sourcePaths: unknown;
+      claimIds: unknown;
+      approvedAt: string | null;
+      publishedReleaseUrl: string | null;
+    } | null;
     socialDrafts: Array<{
       id: string;
       platform: string;
@@ -155,6 +172,25 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
           maxAttempts: true,
           nextAttemptAt: true,
           assets: { orderBy: { createdAt: "asc" }, select: { id: true, type: true, status: true, storageKey: true, mimeType: true } },
+          launchPackage: {
+            select: {
+              id: true,
+              status: true,
+              repositoryOwner: true,
+              repositoryName: true,
+              defaultBranch: true,
+              sourceSha: true,
+              repositoryDescription: true,
+              readmeMarkdown: true,
+              releaseTag: true,
+              releaseTitle: true,
+              releaseNotesMarkdown: true,
+              sourcePaths: true,
+              claimIds: true,
+              approvedAt: true,
+              publishedReleaseUrl: true,
+            },
+          },
           socialDrafts: {
             orderBy: { platform: "asc" },
             select: {
@@ -188,6 +224,11 @@ export async function getProjectDetail(ownerId: string, projectId: string): Prom
       completedAt: run.completedAt?.toISOString() ?? null,
       nextAttemptAt: run.nextAttemptAt.toISOString(),
       assets: run.assets.map((asset) => ({ ...asset, type: asset.type, status: asset.status })),
+      launchPackage: run.launchPackage ? {
+        ...run.launchPackage,
+        status: run.launchPackage.status,
+        approvedAt: run.launchPackage.approvedAt?.toISOString() ?? null,
+      } : null,
       socialDrafts: run.socialDrafts.map((draft) => ({ ...draft, platform: draft.platform, status: draft.status, approvedAt: draft.approvedAt?.toISOString() ?? null })),
     })),
   };
