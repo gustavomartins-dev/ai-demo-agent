@@ -57,6 +57,8 @@ jobs:
           NODE_ENV: production
           AUTH_URL: https://ci.example.com
           APP_BASE_URL: https://ci.example.com
+          GITHUB_LAUNCH_TOKEN: ci-github-launch-token
+          GITHUB_API_VERSION: "2026-03-10"
           SOCIAL_TOKEN_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
           SOCIAL_TOKEN_ENCRYPTION_KEY_ID: ci-v1
           X_CLIENT_ID: ci-x-client
