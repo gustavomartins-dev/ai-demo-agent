@@ -97,6 +97,46 @@ describe("desktop Hermes runner", () => {
     expect(runHermes).toHaveBeenCalledTimes(1);
   });
 
+  it("executes deterministic wait steps on the host without calling Hermes", async () => {
+    const root = path.join(os.tmpdir(), `desktop-runner-${crypto.randomUUID()}`);
+    const project = path.join(root, "project");
+    const output = path.join(root, "output");
+    await mkdir(path.join(project, "bin"), { recursive: true });
+    const executable = path.join(project, "bin", "product");
+    await writeFile(executable, "#!/bin/sh\n", "utf8");
+    await chmod(executable, 0o755);
+    const runHermes = vi.fn();
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const waitPlan = {
+      ...plan,
+      demo: {
+        ...plan.demo,
+        steps: [{ action: "wait" as const, milliseconds: 10_000, title: "Waiting for visible progress" }],
+      },
+    };
+
+    await runDesktopDemoWithReport(waitPlan, { projectPath: project, launchCommand: "./bin/product" },
+      { command: "hermes", timeoutMs: 120_000 }, output, {
+        allowedRoots: [root],
+        launchApp: vi.fn().mockResolvedValue({ pid: 4321, stop: vi.fn().mockResolvedValue(undefined) }),
+        resolveWindowId: async () => "0xe00004",
+        startRecorder: vi.fn().mockImplementation(async (_windowId: string, videoPath: string) => {
+          await writeFile(videoPath, Buffer.alloc(32));
+          return { stop: vi.fn().mockResolvedValue(undefined) };
+        }),
+        runHermes,
+        sleep,
+        captureFrame: vi.fn().mockImplementation(async (_windowId: string, framePath: string) => writeFile(framePath, Buffer.alloc(16))),
+        frameHasVisibleContent: vi.fn().mockResolvedValue(true),
+        validateVideo: vi.fn().mockResolvedValue(undefined),
+        videoDuration: vi.fn().mockResolvedValue(6),
+        composeVideo: async (_sourcePath, outputPath) => writeFile(outputPath, Buffer.alloc(32)),
+      });
+
+    expect(sleep).toHaveBeenCalledWith(10_000);
+    expect(runHermes).not.toHaveBeenCalled();
+  });
+
   it("creates step-synced WebVTT captions instead of a linear slice of the summary", () => {
     const segments = [
       { sourceStartSec: 0, sourceEndSec: 1.2, speed: 1 },

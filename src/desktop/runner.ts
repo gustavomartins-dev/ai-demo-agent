@@ -336,6 +336,7 @@ export async function runDesktopDemoWithReport(
     videoDuration?: VideoDurationReader;
     captureFrame?: FrameCapturer;
     frameHasVisibleContent?: FrameValidator;
+    sleep?: (milliseconds: number) => Promise<void>;
     allowedRoots?: string[];
   } = {},
 ): Promise<DemoRunResult> {
@@ -389,14 +390,21 @@ export async function runDesktopDemoWithReport(
       let stepStatus: "passed" | "failed" = "failed";
       let stepError: string | undefined;
       try {
-        const result = await (dependencies.runHermes ?? defaultHermesRunner)(hermes.command, args, {
-          cwd: launch.projectPath,
-          timeout: Math.max(hermes.timeoutMs, 60_000),
-          env: runtimeEnvironment,
-        });
-        if (!result.stdout.trim()) throw new Error(result.stderr.trim() || "Hermes returned no result for this step");
-        const parsed = stepResultSchema.parse(extractJson(result.stdout));
-        if (parsed.status !== "passed") throw new Error(parsed.error || "Hermes reported this step as failed");
+        if (step.action === "wait") {
+          // Waiting is deterministic and does not require model judgment or
+          // Computer Use. Keeping it on the host avoids a costly model round
+          // trip while preserving the same timing and screenshot evidence.
+          await (dependencies.sleep ?? ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds))))(step.milliseconds);
+        } else {
+          const result = await (dependencies.runHermes ?? defaultHermesRunner)(hermes.command, args, {
+            cwd: launch.projectPath,
+            timeout: Math.max(hermes.timeoutMs, 60_000),
+            env: runtimeEnvironment,
+          });
+          if (!result.stdout.trim()) throw new Error(result.stderr.trim() || "Hermes returned no result for this step");
+          const parsed = stepResultSchema.parse(extractJson(result.stdout));
+          if (parsed.status !== "passed") throw new Error(parsed.error || "Hermes reported this step as failed");
+        }
         stepStatus = "passed";
       } catch (error) {
         stepError = error instanceof Error ? error.message : String(error);

@@ -41,10 +41,17 @@ function headers(token?: string, version = DEFAULT_API_VERSION): HeadersInit {
   };
 }
 
-async function requestJson(fetcher: Fetcher, url: string, token?: string, version?: string, signal?: AbortSignal): Promise<unknown> {
+async function requestJson(fetcher: Fetcher, url: string, authentication: { token?: string }, version?: string, signal?: AbortSignal): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetcher(url, { headers: headers(token, version), signal });
+    response = await fetcher(url, { headers: headers(authentication.token, version), signal });
+    // OAuth tokens can be revoked independently of the user's session. Public
+    // repositories must remain readable when that happens, so retry once
+    // without credentials instead of failing the entire generation run.
+    if (authentication.token && response.status === 401) {
+      delete authentication.token;
+      response = await fetcher(url, { headers: headers(undefined, version), signal });
+    }
   } catch (error) {
     throw new GitHubRepositoryError("network_or_timeout", { cause: error });
   }
@@ -103,15 +110,16 @@ export async function readGitHubRepositorySnapshot(
 ): Promise<RepositorySnapshot> {
   const repository = parseGitHubRepositoryUrl(repositoryUrl);
   const fetcher = options.fetcher ?? fetch;
+  const authentication = { ...(options.token ? { token: options.token } : {}) };
   const base = `${API_ROOT}/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`;
-  const repositoryData = await requestJson(fetcher, base, options.token, options.apiVersion, options.signal) as Record<string, unknown>;
+  const repositoryData = await requestJson(fetcher, base, authentication, options.apiVersion, options.signal) as Record<string, unknown>;
   if (typeof repositoryData.default_branch !== "string") throw new GitHubRepositoryError("invalid_repository_response");
   const defaultBranch = repositoryData.default_branch;
-  const commitData = await requestJson(fetcher, `${base}/commits/${encodeURIComponent(defaultBranch)}`, options.token, options.apiVersion, options.signal) as Record<string, unknown>;
+  const commitData = await requestJson(fetcher, `${base}/commits/${encodeURIComponent(defaultBranch)}`, authentication, options.apiVersion, options.signal) as Record<string, unknown>;
   const sourceSha = typeof commitData.sha === "string" ? commitData.sha : null;
   const treeSha = (commitData.commit as { tree?: { sha?: unknown } } | undefined)?.tree?.sha;
   if (!sourceSha || typeof treeSha !== "string") throw new GitHubRepositoryError("invalid_commit_response");
-  const treeData = await requestJson(fetcher, `${base}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`, options.token, options.apiVersion, options.signal) as Record<string, unknown>;
+  const treeData = await requestJson(fetcher, `${base}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`, authentication, options.apiVersion, options.signal) as Record<string, unknown>;
   const tree = Array.isArray(treeData.tree) ? treeData.tree : [];
   const candidates = tree
     .filter((entry): entry is { path: string; sha: string; type: string; url: string; size?: number } => {
@@ -129,7 +137,7 @@ export async function readGitHubRepositorySnapshot(
     if (totalCharacters >= MAX_TOTAL_CHARACTERS) break;
     const expectedPrefix = `${base}/git/blobs/`;
     if (!candidate.url.startsWith(expectedPrefix)) continue;
-    const blob = await requestJson(fetcher, candidate.url, options.token, options.apiVersion, options.signal);
+    const blob = await requestJson(fetcher, candidate.url, authentication, options.apiVersion, options.signal);
     const decoded = decodeBlob(blob);
     if (!decoded || decoded.includes("\u0000")) continue;
     const redacted = redactSensitiveContent(decoded);

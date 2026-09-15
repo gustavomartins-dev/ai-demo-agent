@@ -39,4 +39,27 @@ describe("GitHub repository snapshot", () => {
     expect(snapshot.files[1]?.content).not.toContain("super-secret-value");
     expect(fetcher.mock.calls.every((call) => (call[1]?.headers as Record<string, string>).Authorization === "Bearer never-log-me")).toBe(true);
   });
+
+  it("retries public repository reads without a revoked OAuth token", async () => {
+    const base = "https://api.github.com/repos/acme/demo";
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const authorization = (init?.headers as Record<string, string> | undefined)?.Authorization;
+      if (authorization) return response({ message: "Bad credentials" }, 401);
+      if (url === base) return response({ default_branch: "main", description: "Public demo" });
+      if (url === `${base}/commits/main`) return response({ sha: "commit-1", commit: { tree: { sha: "tree-1" } } });
+      if (url === `${base}/git/trees/tree-1?recursive=1`) return response({ tree: [] });
+      return response({}, 404);
+    });
+
+    const snapshot = await readGitHubRepositorySnapshot("https://github.com/acme/demo", {
+      token: "revoked-token",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    expect(snapshot).toMatchObject({ owner: "acme", name: "demo", sourceSha: "commit-1" });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect((fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization).toBe("Bearer revoked-token");
+    expect((fetcher.mock.calls[1]?.[1]?.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
 });
