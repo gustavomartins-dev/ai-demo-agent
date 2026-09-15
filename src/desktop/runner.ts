@@ -305,6 +305,11 @@ function extractJson(response: string): unknown {
   return JSON.parse(fenced?.[1] ?? trimmed);
 }
 
+function isTransientComputerUseError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /session (?:became |is )?unavailable|temporar(?:y|ily) unavailable|timed? ?out|timeout|returned no result/i.test(message);
+}
+
 export function buildDesktopStepPrompt(step: DemoStep, stepNumber: number, totalSteps: number, pid: number, windowId?: string): string {
   return [
     "Operate one already-launched native desktop application to execute exactly one step of a verified demo.",
@@ -396,14 +401,24 @@ export async function runDesktopDemoWithReport(
           // trip while preserving the same timing and screenshot evidence.
           await (dependencies.sleep ?? ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds))))(step.milliseconds);
         } else {
-          const result = await (dependencies.runHermes ?? defaultHermesRunner)(hermes.command, args, {
-            cwd: launch.projectPath,
-            timeout: Math.max(hermes.timeoutMs, 60_000),
-            env: runtimeEnvironment,
-          });
-          if (!result.stdout.trim()) throw new Error(result.stderr.trim() || "Hermes returned no result for this step");
-          const parsed = stepResultSchema.parse(extractJson(result.stdout));
-          if (parsed.status !== "passed") throw new Error(parsed.error || "Hermes reported this step as failed");
+          const runHermes = dependencies.runHermes ?? defaultHermesRunner;
+          const safeToRetry = step.action === "fill" || step.action === "assertVisible";
+          const attempts = safeToRetry ? 2 : 1;
+          for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            try {
+              const result = await runHermes(hermes.command, args, {
+                cwd: launch.projectPath,
+                timeout: Math.max(hermes.timeoutMs, 60_000),
+                env: runtimeEnvironment,
+              });
+              if (!result.stdout.trim()) throw new Error(result.stderr.trim() || "Hermes returned no result for this step");
+              const parsed = stepResultSchema.parse(extractJson(result.stdout));
+              if (parsed.status !== "passed") throw new Error(parsed.error || "Hermes reported this step as failed");
+              break;
+            } catch (error) {
+              if (attempt === attempts || !isTransientComputerUseError(error)) throw error;
+            }
+          }
         }
         stepStatus = "passed";
       } catch (error) {
