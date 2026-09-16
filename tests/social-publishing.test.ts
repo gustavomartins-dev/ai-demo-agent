@@ -131,7 +131,7 @@ describe("publishing safety contract", () => {
     expect(source).toContain("socialDraftId_approvalHash");
     expect(source).toContain('status: "APPROVED"');
     expect(source).toContain("draft.content !== draft.approvedContent");
-    expect(source).toContain("socialContentHash(draft.platform, draft.approvedContent)");
+    expect(source).toContain("socialContentHash(draft.platform, draft.approvedContent, approvedVideoStorageKey)");
     expect(source.indexOf("transaction.publishAttempt.create")).toBeLessThan(source.indexOf("await callProvider"));
     expect(source).toContain('providerError.ambiguous ? "UNKNOWN" : "FAILED"');
     expect(source).toContain('if (existing) return { kind: "handled"');

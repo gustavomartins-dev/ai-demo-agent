@@ -248,7 +248,17 @@ export async function updateOwnedSocialDraft(
     if (!draft) return null;
     const updated = await transaction.socialDraft.updateMany({
       where: { id: draftId, platform, generationRun: { project: { ownerId } } },
-      data: { content, status: "DRAFT", approvedAt: null, approvedByUserId: null, approvedContent: null, approvedContentHash: null },
+      data: {
+        content,
+        status: "DRAFT",
+        approvedAt: null,
+        approvedByUserId: null,
+        approvedContent: null,
+        approvedContentHash: null,
+        publishedPostId: null,
+        publishedPostUrl: null,
+        publishedAt: null,
+      },
     });
     return updated.count === 1 ? { projectId: draft.generationRun.projectId } : null;
   });

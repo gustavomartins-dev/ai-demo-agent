@@ -13,9 +13,12 @@ when present, the GitHub `LaunchPackage` have all published successfully.
 ## Safety and idempotency
 
 Approval stores `approvedContent`, its SHA-256 `approvedContentHash`, the owner
-ID, and timestamp. Editing clears all approval fields. Approval is blocked
-without verified evidence and a connected, unexpired account for the same
-platform.
+ID, and timestamp. For LinkedIn, the hash also binds the latest ready video
+storage key so a different recording cannot be substituted after review.
+Editing clears the approval and prior publication pointers while preserving
+the immutable `PublishAttempt` audit trail. Approval is blocked without
+verified evidence, the LinkedIn video when applicable, and a connected,
+unexpired account for the same platform.
 
 Before an external request, PostgreSQL atomically changes the draft from
 `APPROVED` to `PUBLISHING` and creates a `PublishAttempt`. The unique

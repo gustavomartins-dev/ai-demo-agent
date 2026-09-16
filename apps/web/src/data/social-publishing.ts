@@ -62,7 +62,11 @@ export async function publishApprovedOwnedSocialDraft(
     if (!draft.approvedContent || !draft.approvedContentHash || draft.status !== "APPROVED") {
       return { kind: "blocked" as const, projectId: draft.generationRun.projectId };
     }
-    if (draft.content !== draft.approvedContent || socialContentHash(draft.platform, draft.approvedContent) !== draft.approvedContentHash) {
+    const approvedVideoStorageKey = draft.platform === "LINKEDIN" ? draft.generationRun.assets[0]?.storageKey : undefined;
+    if (draft.platform === "LINKEDIN" && !approvedVideoStorageKey) {
+      return { kind: "blocked" as const, projectId: draft.generationRun.projectId };
+    }
+    if (draft.content !== draft.approvedContent || socialContentHash(draft.platform, draft.approvedContent, approvedVideoStorageKey) !== draft.approvedContentHash) {
       return { kind: "blocked" as const, projectId: draft.generationRun.projectId };
     }
     const existing = await transaction.publishAttempt.findUnique({

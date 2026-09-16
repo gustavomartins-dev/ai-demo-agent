@@ -13,6 +13,8 @@ describe("explicit social draft approval", () => {
     expect(socialContentHash("X", content)).toHaveLength(64);
     expect(socialContentHash("X", content)).not.toBe(socialContentHash("LINKEDIN", content));
     expect(socialContentHash("X", content)).not.toBe(socialContentHash("X", `${content} `));
+    expect(socialContentHash("LINKEDIN", content, "run-a/presentation.mp4"))
+      .not.toBe(socialContentHash("LINKEDIN", content, "run-b/presentation.mp4"));
   });
 
   it("requires owner, matching connected account, credential, and evidence", async () => {
@@ -24,6 +26,7 @@ describe("explicit social draft approval", () => {
     expect(source).toContain("draft.evidence.length === 0");
     expect(source).toContain("approvedContent: draft.content");
     expect(source).toContain("approvedContentHash: socialContentHash");
+    expect(source).toContain('draft.platform === "LINKEDIN" && !approvedVideoStorageKey');
   });
 
   it("invalidates approval after an edit and never publishes from approval", async () => {
@@ -31,6 +34,7 @@ describe("explicit social draft approval", () => {
     const actions = await readFile(actionsPath, "utf8");
     expect(projects).toContain("approvedContentHash: null");
     expect(projects).toContain("approvedByUserId: null");
+    expect(projects).toContain("publishedPostUrl: null");
     const approvalAction = actions.match(/export async function approveSocialDraftAction[\s\S]*?\n\}/)?.[0];
     expect(approvalAction).toBeDefined();
     expect(approvalAction).not.toMatch(/fetch\(|publishApproved|createPost/i);

@@ -79,10 +79,22 @@ export async function approveOwnedSocialDraft(
         content: true,
         evidence: true,
         claimIds: true,
-        generationRun: { select: { projectId: true } },
+        generationRun: {
+          select: {
+            projectId: true,
+            assets: {
+              where: { type: "VIDEO", status: "READY" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { storageKey: true },
+            },
+          },
+        },
       },
     });
     if (!draft || !Array.isArray(draft.evidence) || draft.evidence.length === 0 || !Array.isArray(draft.claimIds) || draft.claimIds.length === 0) return null;
+    const approvedVideoStorageKey = draft.platform === "LINKEDIN" ? draft.generationRun.assets[0]?.storageKey : undefined;
+    if (draft.platform === "LINKEDIN" && !approvedVideoStorageKey) return null;
     const account = await transaction.socialAccount.findFirst({
       where: {
         userId: ownerId,
@@ -100,7 +112,7 @@ export async function approveOwnedSocialDraft(
         approvedAt: now,
         approvedByUserId: ownerId,
         approvedContent: draft.content,
-        approvedContentHash: socialContentHash(draft.platform, draft.content),
+        approvedContentHash: socialContentHash(draft.platform, draft.content, approvedVideoStorageKey),
       },
     });
     return approved.count === 1 ? { projectId: draft.generationRun.projectId, platform: draft.platform } : null;
