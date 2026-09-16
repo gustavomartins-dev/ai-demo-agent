@@ -27,6 +27,16 @@ describe("social draft quality evals", () => {
     expect(result.checks).toHaveLength(7);
   });
 
+  it("does not mistake an English video post and a .com URL for Portuguese", async () => {
+    const input = await fixture("success") as { x: { content: string }; linkedin: { content: string } };
+    input.x.content = "I built this video pipeline and verified the video output. https://github.com/example/ai-demo-agent";
+    input.linkedin.content = "I built a video workflow and kept human review explicit. https://github.com/example/ai-demo-agent";
+
+    const result = evaluateSocialDraftBundle(input, context);
+
+    expect(result.checks.find((check) => check.name === "english_only")?.passed).toBe(true);
+  });
+
   it("detects content mislabeled as English", async () => {
     const result = evaluateSocialDraftBundle(await fixture("adversarial-portuguese"), context);
     expect(result.passed).toBe(false);

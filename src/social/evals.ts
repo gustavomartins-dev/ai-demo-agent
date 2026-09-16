@@ -10,11 +10,17 @@ export type SocialEvalResult = { passed: boolean; checks: SocialEvalCheck[] };
 
 const portugueseSignals = new Set([
   "ainda", "aplicacao", "aplicação", "com", "como", "consegui", "este", "esta", "está", "feito",
-  "foi", "funciona", "para", "pela", "projeto", "resultado", "uma", "video", "vídeo",
+  "foi", "funciona", "para", "pela", "projeto", "resultado", "uma", "vídeo",
 ]);
 
 function words(content: string): string[] {
-  return content.toLocaleLowerCase("en-US").match(/[\p{L}]+/gu) ?? [];
+  // Links are required in open-source posts. Their `.com` segment is not
+  // prose and must not count as a Portuguese signal. `video` without an
+  // accent is also a valid English word, so only the accented form remains.
+  return content
+    .replace(/https?:\/\/\S+/gi, " ")
+    .toLocaleLowerCase("en-US")
+    .match(/[\p{L}]+/gu) ?? [];
 }
 
 export function appearsEnglish(content: string): boolean {
