@@ -1,9 +1,11 @@
 import type { SocialPlatform } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 import { db } from "@/lib/db";
+import { resolveArtifactPath } from "@/lib/media-delivery";
 import { socialContentHash } from "@/lib/social-approval";
 import { decryptSecret, loadTokenEncryptionConfig } from "@/lib/social-oauth/crypto";
-import { publishSocialPost, SocialPublishProviderError, type PublishResult } from "@/lib/social-publishing/provider";
+import { publishSocialPost, SocialPublishProviderError, type PublishMedia, type PublishResult } from "@/lib/social-publishing/provider";
 import { refreshExpiredSocialAccount } from "@/data/social-accounts";
 
 type Publisher = (
@@ -11,6 +13,7 @@ type Publisher = (
   content: string,
   accessToken: string,
   identity: { externalAccountId: string; handle: string | null },
+  media?: PublishMedia,
 ) => Promise<PublishResult>;
 
 export type PublishOutcome =
@@ -36,7 +39,20 @@ export async function publishApprovedOwnedSocialDraft(
       where: { id: draftId, generationRun: { project: { ownerId } } },
       select: {
         id: true, platform: true, status: true, content: true, approvedContent: true, approvedContentHash: true,
-        publishedPostUrl: true, generationRun: { select: { id: true, projectId: true } },
+        publishedPostUrl: true,
+        generationRun: {
+          select: {
+            id: true,
+            projectId: true,
+            project: { select: { name: true } },
+            assets: {
+              where: { type: "VIDEO", status: "READY" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { storageKey: true, mimeType: true },
+            },
+          },
+        },
       },
     });
     if (!draft) return { kind: "blocked" as const };
@@ -88,20 +104,38 @@ export async function publishApprovedOwnedSocialDraft(
       encryptedAccessToken: account.credential.encryptedAccessToken,
       externalAccountId: account.externalAccountId,
       handle: account.handle,
+      projectName: draft.generationRun.project.name,
+      videoAsset: draft.generationRun.assets[0] ?? null,
     };
   });
 
   if (prepared.kind === "blocked") return { status: "blocked", ...(prepared.projectId ? { projectId: prepared.projectId } : {}) };
   if (prepared.kind === "handled") return { status: "already_handled", projectId: prepared.projectId, url: prepared.url };
   const accessToken = decryptSecret(prepared.encryptedAccessToken, encryption);
-  const callProvider = publisher ?? ((platform, content, token, identity) => publishSocialPost(platform, content, token, identity, {
+  const callProvider = publisher ?? ((platform, content, token, identity, media) => publishSocialPost(platform, content, token, identity, {
     linkedInVersion: process.env.LINKEDIN_API_VERSION,
+    media,
   }));
   try {
+    let media: PublishMedia | undefined;
+    if (prepared.platform === "LINKEDIN") {
+      if (!prepared.videoAsset) throw new SocialPublishProviderError("missing_video_asset", false);
+      try {
+        const filePath = resolveArtifactPath(process.env.AI_DEMO_OUTPUT_ROOT ?? "output", prepared.videoAsset.storageKey);
+        media = {
+          kind: "video",
+          contentType: prepared.videoAsset.mimeType,
+          data: await readFile(filePath),
+          title: `${prepared.projectName} demo`,
+        };
+      } catch {
+        throw new SocialPublishProviderError("video_asset_unavailable", false);
+      }
+    }
     const result = await callProvider(prepared.platform, prepared.content, accessToken, {
       externalAccountId: prepared.externalAccountId,
       handle: prepared.handle,
-    });
+    }, media);
     await db.$transaction(async (transaction) => {
       await transaction.publishAttempt.update({ where: { id: prepared.attemptId }, data: { status: "SUCCEEDED", providerPostId: result.providerPostId, providerPostUrl: result.providerPostUrl, completedAt: new Date() } });
       await transaction.socialDraft.update({ where: { id: prepared.draftId }, data: { status: "PUBLISHED", publishedPostId: result.providerPostId, publishedPostUrl: result.providerPostUrl, publishedAt: new Date() } });

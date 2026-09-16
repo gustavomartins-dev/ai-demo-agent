@@ -33,9 +33,14 @@ an `UNKNOWN` attempt merely to retry; that can create a duplicate.
 - X: `POST https://api.x.com/2/tweets` with the exact approved text and the
   account's OAuth 2.0 user access token. See the official
   [Create Posts API](https://docs.x.com/x-api/posts/create-post).
-- LinkedIn: `POST https://api.linkedin.com/rest/posts` with the verified member
-  URN, public visibility, main-feed distribution, `Linkedin-Version`, and
-  Rest.li protocol headers.
+- LinkedIn: load the latest `READY` video from `AI_DEMO_OUTPUT_ROOT`, initialize
+  an upload with `POST https://api.linkedin.com/rest/videos?action=initializeUpload`,
+  upload every byte range, finalize it with `action=finalizeUpload`, and then
+  attach the returned video URN to `POST https://api.linkedin.com/rest/posts`.
+  The post uses the verified member URN, exact approved text, public visibility,
+  main-feed distribution, `Linkedin-Version`, and Rest.li protocol headers.
+  A missing or unreadable video blocks publication instead of silently creating
+  a text-only post.
 
 Set `LINKEDIN_API_VERSION` to a six-digit version currently supported by the
 LinkedIn application. Treat version changes as releases and run the safety gate
@@ -74,7 +79,7 @@ Complete this checklist with test posts before allowing production use:
 6. Publish X once, double-click during the request, and confirm one external
    post and one `PublishAttempt`.
 7. Approve and publish LinkedIn; confirm the stored provider ID and URL open the
-   expected member post.
+   expected member post and that the generated demo video is attached.
 8. Disconnect each account and confirm encrypted `SocialCredential` rows are
    removed.
 9. Revoke access in each provider's connected-app settings and confirm the app
@@ -90,6 +95,8 @@ Complete this checklist with test posts before allowing production use:
 | `network_or_timeout` | Request outcome is unknown | Treat as possibly published and reconcile manually |
 | `missing_restli_id` / `invalid_success_response` | Provider reported success without usable identity | Treat as possibly published and reconcile manually |
 | `linkedin_version_missing` | Deployment configuration is incomplete | Set a supported version; no request was sent |
+| `missing_video_asset` / `video_asset_unavailable` | The approved run has no readable generated video | Restore the durable output volume or generate the demo again, then approve a new snapshot |
+| `linkedin_video_*` | LinkedIn rejected or could not complete video initialization, upload, or finalization | No post was created; inspect the stable subcode and approve a new snapshot after fixing the cause |
 
 If tokens or the encryption key leak: disable the application, revoke both
 provider authorizations, delete local credentials, rotate the encryption key

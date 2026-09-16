@@ -23,6 +23,82 @@ describe("official social publishing clients", () => {
     }));
   });
 
+  it("uploads the generated video and attaches its URN to the LinkedIn post", async () => {
+    const video = Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]);
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: {
+          video: "urn:li:video:demo-123",
+          uploadToken: "upload-token",
+          uploadInstructions: [
+            { uploadUrl: "https://upload.linkedin.test/part-1", firstByte: 0, lastByte: 3 },
+            { uploadUrl: "https://upload.linkedin.test/part-2", firstByte: 4, lastByte: 7 },
+          ],
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200, headers: { etag: '"part-1"' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 200, headers: { etag: '"part-2"' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201, headers: { "x-restli-id": "urn:li:share:video-post" } }));
+
+    await expect(publishSocialPost(
+      "LINKEDIN",
+      "the approved copy",
+      "secret",
+      { externalAccountId: "li-1", handle: null },
+      {
+        linkedInVersion: "202608",
+        fetcher,
+        media: { kind: "video", contentType: "video/mp4", data: video, title: "DemoAgent demo" },
+      },
+    )).resolves.toEqual({
+      providerPostId: "urn:li:share:video-post",
+      providerPostUrl: "https://www.linkedin.com/feed/update/urn:li:share:video-post",
+    });
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://api.linkedin.com/rest/videos?action=initializeUpload", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"fileSizeBytes":8'),
+    }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://upload.linkedin.test/part-1", expect.objectContaining({ method: "PUT" }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "https://upload.linkedin.test/part-2", expect.objectContaining({ method: "PUT" }));
+    expect(fetcher).toHaveBeenNthCalledWith(4, "https://api.linkedin.com/rest/videos?action=finalizeUpload", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"uploadedPartIds":["part-1","part-2"]'),
+    }));
+    const postRequest = fetcher.mock.calls[4]?.[1] as RequestInit;
+    expect(JSON.parse(String(postRequest.body))).toMatchObject({
+      commentary: "the approved copy",
+      content: { media: { title: "DemoAgent demo", id: "urn:li:video:demo-123" } },
+    });
+  });
+
+  it("fails safely before creating a LinkedIn post when an uploaded part has no ETag", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: {
+          video: "urn:li:video:demo-123",
+          uploadToken: "upload-token",
+          uploadInstructions: [{ uploadUrl: "https://upload.linkedin.test/part", firstByte: 0, lastByte: 3 }],
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    const request = publishSocialPost(
+      "LINKEDIN",
+      "hello",
+      "secret",
+      { externalAccountId: "li-1", handle: null },
+      {
+        linkedInVersion: "202608",
+        fetcher,
+        media: { kind: "video", contentType: "video/mp4", data: Uint8Array.from([1, 2, 3, 4]), title: "Demo" },
+      },
+    );
+    await expect(request).rejects.toMatchObject({ code: "linkedin_video_missing_etag", ambiguous: false });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("classifies network and server failures as ambiguous without leaking secrets", async () => {
     const network = publishSocialPost("X", "hello", "secret-token", { externalAccountId: "x-1", handle: "@gustavo" }, { fetcher: vi.fn().mockRejectedValue(new Error("secret-token")) });
     await expect(network).rejects.toMatchObject({ code: "network_or_timeout", ambiguous: true });
